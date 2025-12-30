@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.list-users]
 verify_jwt = true
+
+[functions.seed-synthetic-data]
+verify_jwt = true
+
+[functions.recompute-anomalies]
+verify_jwt = true

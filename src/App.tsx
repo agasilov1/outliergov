@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
 import AcceptInvite from "./pages/AcceptInvite";
 import Dashboard from "./pages/Dashboard";
+import ProviderDetail from "./pages/ProviderDetail";
 import Methodology from "./pages/Methodology";
 import DataSources from "./pages/DataSources";
 import Admin from "./pages/Admin";
@@ -32,6 +33,16 @@ const App = () => (
                 <ProtectedRoute>
                   <AppLayout>
                     <Dashboard />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/provider/:id"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <ProviderDetail />
                   </AppLayout>
                 </ProtectedRoute>
               }

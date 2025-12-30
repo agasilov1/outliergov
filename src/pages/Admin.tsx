@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw } from 'lucide-react';
 
 interface Invitation {
   id: string;
@@ -38,7 +38,12 @@ interface Firm {
 
 export default function Admin() {
   const { user, session } = useAuth();
-  const [activeSection, setActiveSection] = useState<'invite' | 'users' | 'firms' | 'audit'>('invite');
+  const [activeSection, setActiveSection] = useState<'invite' | 'users' | 'firms' | 'data' | 'audit'>('invite');
+  
+  // Data management state
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [recomputeLoading, setRecomputeLoading] = useState(false);
+  const [lastComputeStats, setLastComputeStats] = useState<{ providers: number; flagged: number; peerGroups: number } | null>(null);
   
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('');
@@ -153,6 +158,42 @@ export default function Admin() {
     }
   }
 
+  async function handleSeedData() {
+    if (!confirm('This will clear existing provider data and seed 5,000 synthetic providers. Continue?')) return;
+    setSeedLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('seed-synthetic-data');
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Seeded ${data.providers_created} providers with ${data.metrics_created} metrics`);
+    } catch (error) {
+      console.error('Error seeding data:', error);
+      toast.error('Failed to seed data');
+    } finally {
+      setSeedLoading(false);
+    }
+  }
+
+  async function handleRecomputeAnomalies() {
+    setRecomputeLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('recompute-anomalies');
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastComputeStats({
+        providers: data.providers_analyzed,
+        flagged: data.providers_flagged,
+        peerGroups: data.peer_groups_analyzed
+      });
+      toast.success(`Flagged ${data.providers_flagged} providers out of ${data.providers_analyzed}`);
+    } catch (error) {
+      console.error('Error recomputing anomalies:', error);
+      toast.error('Failed to recompute anomalies');
+    } finally {
+      setRecomputeLoading(false);
+    }
+  }
+
   function formatDate(dateString: string) {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -219,6 +260,18 @@ export default function Admin() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Building2 className="h-5 w-5 text-accent" />
               Firms ({firms.length})
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-colors ${activeSection === 'data' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+          onClick={() => setActiveSection('data')}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Database className="h-5 w-5 text-accent" />
+              Data Management
             </CardTitle>
           </CardHeader>
         </Card>
@@ -457,6 +510,58 @@ export default function Admin() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Data Management Section */}
+      {activeSection === 'data' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Seed Synthetic Data</CardTitle>
+              <CardDescription>
+                Generate 5,000 synthetic Medicare-style providers with realistic distributions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This will clear any existing provider data and generate new deterministic synthetic data 
+                with log-normal payment distributions for Phase 2 testing.
+              </p>
+              <Button onClick={handleSeedData} disabled={seedLoading} className="w-full">
+                {seedLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Seed Synthetic Data
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recompute Anomalies</CardTitle>
+              <CardDescription>
+                Run the anomaly detection algorithm on current provider data
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Flags providers at ≥99.5th percentile rank within their peer group (specialty + state) 
+                for both 2023 and 2024.
+              </p>
+              <Button onClick={handleRecomputeAnomalies} disabled={recomputeLoading} className="w-full">
+                {recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Recompute Anomalies
+              </Button>
+              {lastComputeStats && (
+                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                  <p><strong>Last Run:</strong></p>
+                  <p>Providers analyzed: {lastComputeStats.providers.toLocaleString()}</p>
+                  <p>Peer groups: {lastComputeStats.peerGroups}</p>
+                  <p>Providers flagged: {lastComputeStats.flagged}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Audit Logs Section */}
