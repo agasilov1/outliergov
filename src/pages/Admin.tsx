@@ -79,20 +79,12 @@ export default function Admin() {
       setInvitations(invitationsData || []);
 
       // Load users via edge function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-users`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          }
-        }
-      );
-
-      if (response.ok) {
-        const { users: usersData } = await response.json();
-        setUsers(usersData || []);
+      const { data, error } = await supabase.functions.invoke('list-users');
+      if (error) {
+        console.error('Error fetching users:', error);
+        toast.error('Failed to load users');
+      } else {
+        setUsers(data?.users || []);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -116,32 +108,26 @@ export default function Admin() {
     setGeneratedLink(null);
     
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-invite`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            email: inviteEmail,
-            role: inviteRole,
-            firm_id: inviteRole === 'firm_user' ? inviteFirmId : null
-          })
+      const { data, error } = await supabase.functions.invoke('generate-invite', {
+        body: {
+          email: inviteEmail,
+          role: inviteRole,
+          firm_id: inviteRole === 'firm_user' ? inviteFirmId : null
         }
-      );
+      });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        toast.error(result.error || 'Failed to generate invitation');
+      if (error) {
+        toast.error('Failed to generate invitation');
         return;
       }
 
-      setGeneratedLink(result.invite_url);
-      setLinkExpiry(result.expires_at);
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      setGeneratedLink(data.invite_url);
+      setLinkExpiry(data.expires_at);
       toast.success('Invitation link generated!');
       
       // Refresh invitations list
