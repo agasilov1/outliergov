@@ -1,10 +1,188 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Users, Building2, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { toast } from 'sonner';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail } from 'lucide-react';
+
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  firm_id: string | null;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+}
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string | null;
+  roles: string[];
+  firm_name: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+}
+
+interface Firm {
+  id: string;
+  name: string;
+}
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const [activeSection, setActiveSection] = useState<'invite' | 'users' | 'firms' | 'audit'>('invite');
+  
+  // Invite form state
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'firm_user'>('firm_user');
+  const [inviteFirmId, setInviteFirmId] = useState<string>('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [linkExpiry, setLinkExpiry] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Data state
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [firms, setFirms] = useState<Firm[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, [session]);
+
+  async function loadData() {
+    if (!session) return;
+    
+    setLoadingData(true);
+    try {
+      // Load firms
+      const { data: firmsData } = await supabase
+        .from('firms')
+        .select('id, name')
+        .order('name');
+      setFirms(firmsData || []);
+
+      // Load invitations (admin can see via RLS)
+      const { data: invitationsData } = await supabase
+        .from('invitations')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setInvitations(invitationsData || []);
+
+      // Load users via edge function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-users`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          }
+        }
+      );
+
+      if (response.ok) {
+        const { users: usersData } = await response.json();
+        setUsers(usersData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  async function handleGenerateInvite() {
+    if (!inviteEmail || !inviteEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (inviteRole === 'firm_user' && !inviteFirmId) {
+      toast.error('Please select a firm for firm users');
+      return;
+    }
+
+    setInviteLoading(true);
+    setGeneratedLink(null);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            email: inviteEmail,
+            role: inviteRole,
+            firm_id: inviteRole === 'firm_user' ? inviteFirmId : null
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(result.error || 'Failed to generate invitation');
+        return;
+      }
+
+      setGeneratedLink(result.invite_url);
+      setLinkExpiry(result.expires_at);
+      toast.success('Invitation link generated!');
+      
+      // Refresh invitations list
+      loadData();
+    } catch (error) {
+      console.error('Error generating invite:', error);
+      toast.error('Failed to generate invitation');
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!generatedLink) return;
+    
+    try {
+      await navigator.clipboard.writeText(generatedLink);
+      setCopied(true);
+      toast.success('Link copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast.error('Failed to copy link');
+    }
+  }
+
+  function formatDate(dateString: string) {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  function isExpired(expiresAt: string) {
+    return new Date(expiresAt) < new Date();
+  }
+
+  const pendingInvitations = invitations.filter(i => !i.accepted_at && !isExpired(i.expires_at));
+  const acceptedInvitations = invitations.filter(i => i.accepted_at);
 
   return (
     <div className="space-y-6">
@@ -21,59 +199,298 @@ export default function Admin() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-accent" />
-              User Management
+      {/* Section Navigation */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card 
+          className={`cursor-pointer transition-colors ${activeSection === 'invite' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+          onClick={() => setActiveSection('invite')}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserPlus className="h-5 w-5 text-accent" />
+              Invite Users
             </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-colors ${activeSection === 'users' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+          onClick={() => setActiveSection('users')}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-5 w-5 text-accent" />
+              All Users ({users.length})
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-colors ${activeSection === 'firms' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+          onClick={() => setActiveSection('firms')}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Building2 className="h-5 w-5 text-accent" />
+              Firms ({firms.length})
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-colors ${activeSection === 'audit' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
+          onClick={() => setActiveSection('audit')}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-5 w-5 text-accent" />
+              Audit Logs
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Invite Users Section */}
+      {activeSection === 'invite' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Generate Invitation Link</CardTitle>
+              <CardDescription>
+                Create a magic link to invite a new user. Share the link manually.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="invite-email">Email Address</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="invite-role">Role</Label>
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'firm_user')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="firm_user">Firm User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {inviteRole === 'firm_user' && (
+                <div className="space-y-2">
+                  <Label htmlFor="invite-firm">Firm</Label>
+                  <Select value={inviteFirmId} onValueChange={setInviteFirmId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a firm..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {firms.map(firm => (
+                        <SelectItem key={firm.id} value={firm.id}>
+                          {firm.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {firms.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No firms available. Create a firm first.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Button 
+                onClick={handleGenerateInvite} 
+                disabled={inviteLoading}
+                className="w-full"
+              >
+                {inviteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Generate Invite Link
+              </Button>
+
+              {generatedLink && (
+                <div className="mt-4 space-y-2 rounded-lg border bg-muted/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Invitation Link</span>
+                    <Badge variant="outline" className="text-xs">
+                      <Clock className="mr-1 h-3 w-3" />
+                      Expires {linkExpiry ? formatDate(linkExpiry) : '7 days'}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input 
+                      value={generatedLink} 
+                      readOnly 
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCopyLink}
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Share this link with the user via your preferred email method.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Invitations</CardTitle>
+              <CardDescription>
+                Invitations that have not been accepted yet
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : pendingInvitations.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No pending invitations
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingInvitations.map(inv => (
+                    <div key={inv.id} className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="font-medium">{inv.email}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="secondary" className="text-xs">
+                            {inv.role}
+                          </Badge>
+                          <span>Expires {formatDate(inv.expires_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Users Section */}
+      {activeSection === 'users' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>All Users</CardTitle>
             <CardDescription>
-              Invite users, assign roles, manage access
+              Users who have accepted invitations and have accounts
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Coming in Phase 3
-            </p>
+            {loadingData ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : users.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No users found
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Roles</TableHead>
+                    <TableHead>Firm</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead>Last Sign In</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map(u => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          {u.email}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {u.roles.map(role => (
+                            <Badge key={role} variant={role === 'admin' ? 'default' : 'secondary'}>
+                              {role}
+                            </Badge>
+                          ))}
+                          {u.roles.length === 0 && (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{u.firm_name || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(u.created_at)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {u.last_sign_in_at ? formatDate(u.last_sign_in_at) : 'Never'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
+      )}
 
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+      {/* Firms Section */}
+      {activeSection === 'firms' && (
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-accent" />
-              Firm Management
-            </CardTitle>
+            <CardTitle>Firm Management</CardTitle>
             <CardDescription>
               Create and manage law firms
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Coming in Phase 3
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Firm management coming in next phase
             </p>
           </CardContent>
         </Card>
+      )}
 
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+      {/* Audit Logs Section */}
+      {activeSection === 'audit' && (
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-accent" />
-              Audit Logs
-            </CardTitle>
+            <CardTitle>Audit Logs</CardTitle>
             <CardDescription>
               View system activity and user actions
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Coming in Phase 3
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Audit log viewer coming in next phase
             </p>
           </CardContent>
         </Card>
-      </div>
+      )}
 
+      {/* Current Admin Info */}
       <Card>
         <CardHeader>
           <CardTitle>Current Admin</CardTitle>
