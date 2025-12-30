@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      anomaly_flags: {
+        Row: {
+          computed_at: string | null
+          id: string
+          peer_group_size: number
+          percentile_2023: number
+          percentile_2024: number
+          provider_id: string
+          rule_version: string
+          specialty: string
+          state: string
+          threshold_2023: number
+          threshold_2024: number
+        }
+        Insert: {
+          computed_at?: string | null
+          id?: string
+          peer_group_size: number
+          percentile_2023: number
+          percentile_2024: number
+          provider_id: string
+          rule_version?: string
+          specialty: string
+          state: string
+          threshold_2023: number
+          threshold_2024: number
+        }
+        Update: {
+          computed_at?: string | null
+          id?: string
+          peer_group_size?: number
+          percentile_2023?: number
+          percentile_2024?: number
+          provider_id?: string
+          rule_version?: string
+          specialty?: string
+          state?: string
+          threshold_2023?: number
+          threshold_2024?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anomaly_flags_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: true
+            referencedRelation: "providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -147,6 +197,68 @@ export type Database = {
           },
         ]
       }
+      provider_yearly_metrics: {
+        Row: {
+          created_at: string | null
+          id: string
+          provider_id: string
+          total_allowed_amount: number
+          total_payment_amount: number
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          provider_id: string
+          total_allowed_amount: number
+          total_payment_amount: number
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          provider_id?: string
+          total_allowed_amount?: number
+          total_payment_amount?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_yearly_metrics_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      providers: {
+        Row: {
+          created_at: string | null
+          id: string
+          npi: string
+          provider_name: string
+          specialty: string
+          state: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          npi: string
+          provider_name: string
+          specialty: string
+          state: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          npi?: string
+          provider_name?: string
+          specialty?: string
+          state?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -173,6 +285,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compute_anomaly_flags: {
+        Args: never
+        Returns: {
+          peer_groups_analyzed: number
+          providers_analyzed: number
+          providers_flagged: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
