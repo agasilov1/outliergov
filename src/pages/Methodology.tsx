@@ -39,10 +39,10 @@ export default function Methodology() {
             <h3 className="mb-2 font-semibold">Flagging Threshold</h3>
             <p className="text-muted-foreground">
               A provider is flagged if their metric is above the <Badge className="bg-warning text-warning-foreground">99.5th percentile</Badge> of 
-              their peer group for <strong>two consecutive years (2023 and 2024)</strong>.
+              their peer group for <strong>the required number of consecutive years in the analysis window</strong>.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              The two-year requirement reduces false positives from one-time anomalies while 
+              The consecutive year requirement reduces false positives from one-time anomalies while 
               identifying providers with consistently elevated billing patterns.
             </p>
           </div>
