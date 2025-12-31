@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -189,6 +189,16 @@ export default function Auth() {
         <br />
         It does not allege fraud or wrongdoing.
       </p>
+
+      <div className="mt-4 flex justify-center gap-4 text-sm text-muted-foreground">
+        <Link to="/privacy" className="underline hover:text-foreground">
+          Privacy Policy
+        </Link>
+        <span>•</span>
+        <Link to="/terms" className="underline hover:text-foreground">
+          Terms of Service
+        </Link>
+      </div>
     </div>
   );
 }
