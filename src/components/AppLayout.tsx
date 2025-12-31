@@ -166,6 +166,21 @@ export function AppLayout({ children }: AppLayoutProps) {
           <main className="flex-1 overflow-auto p-6">
             {children}
           </main>
+
+          {/* Footer */}
+          <footer className="border-t bg-card px-6 py-4">
+            <div className="flex flex-col items-center justify-between gap-2 text-sm text-muted-foreground sm:flex-row">
+              <p>© {new Date().getFullYear()} OutlierGov. All rights reserved.</p>
+              <div className="flex gap-4">
+                <Link to="/privacy" className="hover:text-foreground hover:underline">
+                  Privacy Policy
+                </Link>
+                <Link to="/terms" className="hover:text-foreground hover:underline">
+                  Terms of Service
+                </Link>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
     </div>

@@ -13,6 +13,8 @@ import ProviderDetail from "./pages/ProviderDetail";
 import Methodology from "./pages/Methodology";
 import DataSources from "./pages/DataSources";
 import Admin from "./pages/Admin";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -74,10 +76,12 @@ const App = () => (
                   <AppLayout>
                     <Admin />
                   </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
