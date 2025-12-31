@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     if (computeError) {
       console.error('Error computing anomaly flags:', computeError);
-      throw computeError;
+      throw new Error(computeError.message || JSON.stringify(computeError));
     }
 
     console.log('Anomaly computation result:', result);
@@ -97,7 +97,11 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in recompute-anomalies:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : (typeof error === 'object' && error !== null && 'message' in error)
+        ? String((error as { message: unknown }).message)
+        : JSON.stringify(error);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
