@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X } from 'lucide-react';
+import { Printer, X, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,14 +13,26 @@ interface Provider {
   state: string;
 }
 
-interface AnomalyFlag {
-  percentile_2023: number;
-  percentile_2024: number;
-  threshold_2023: number;
-  threshold_2024: number;
-  peer_group_size: number;
-  rule_version: string;
+interface AnomalyFlagV2 {
+  id: string;
+  flagged: boolean;
+  flag_reason: string | null;
+  metric_name: string;
+  rule_set_version: string;
+  peer_group_key: string;
+  peer_group_version: string;
+  threshold_percentile_required: number;
+  min_peer_size_required: number;
+  consecutive_years_required: number;
   computed_at: string;
+}
+
+interface AnomalyFlagYear {
+  year: number;
+  percentile_rank: number;
+  peer_size: number;
+  value: number;
+  p995_threshold: number;
 }
 
 interface Metric {
@@ -35,17 +47,44 @@ interface PeerStats {
   p99: number;
   p995: number;
   mean: number;
+  peer_size: number;
+}
+
+interface DatasetRelease {
+  id: string;
+  release_label: string;
+  dataset_key: string;
+  ingested_at: string | null;
+  source_url: string | null;
+}
+
+interface ComputeRun {
+  id: string;
+  rule_set_version: string;
+  finished_at: string | null;
 }
 
 interface ProviderBriefProps {
   provider: Provider;
-  anomalyFlag: AnomalyFlag;
+  anomalyFlagV2: AnomalyFlagV2 | null;
+  flagYears: AnomalyFlagYear[];
   metrics: Metric[];
   peerStats: PeerStats[];
+  datasetRelease?: DatasetRelease | null;
+  computeRun?: ComputeRun | null;
   onClose: () => void;
 }
 
-export function ProviderBrief({ provider, anomalyFlag, metrics, peerStats, onClose }: ProviderBriefProps) {
+export function ProviderBrief({ 
+  provider, 
+  anomalyFlagV2, 
+  flagYears,
+  metrics, 
+  peerStats,
+  datasetRelease,
+  computeRun,
+  onClose 
+}: ProviderBriefProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
@@ -62,6 +101,15 @@ export function ProviderBrief({ provider, anomalyFlag, metrics, peerStats, onClo
     return `${value.toFixed(1)}th`;
   };
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   const handlePrint = async () => {
     // Log export action
     if (user) {
@@ -72,7 +120,9 @@ export function ProviderBrief({ provider, anomalyFlag, metrics, peerStats, onClo
         entity_id: provider.id,
         metadata: {
           provider_name: provider.provider_name,
-          npi: provider.npi
+          npi: provider.npi,
+          dataset_release_id: datasetRelease?.id,
+          compute_run_id: computeRun?.id
         }
       });
     }
@@ -80,10 +130,8 @@ export function ProviderBrief({ provider, anomalyFlag, metrics, peerStats, onClo
     window.print();
   };
 
-  const metric2023 = metrics.find(m => m.year === 2023);
-  const metric2024 = metrics.find(m => m.year === 2024);
-  const stats2023 = peerStats.find(s => s.year === 2023);
-  const stats2024 = peerStats.find(s => s.year === 2024);
+  const hasLowSampleYear = flagYears.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
+  const uniqueYears = [...new Set(flagYears.map(fy => fy.year))].sort();
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -143,68 +191,162 @@ export function ProviderBrief({ provider, anomalyFlag, metrics, peerStats, onClo
             </table>
           </section>
 
-          {/* Statistical Summary */}
+          {/* Data Lineage */}
+          {datasetRelease && (
+            <section>
+              <h2 className="mb-3 text-lg font-semibold">Data Lineage</h2>
+              <table className="w-full text-sm">
+                <tbody>
+                  <tr className="border-b">
+                    <td className="py-2 font-medium text-muted-foreground">Dataset</td>
+                    <td className="py-2">{datasetRelease.release_label}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="py-2 font-medium text-muted-foreground">Ingested</td>
+                    <td className="py-2">{formatDate(datasetRelease.ingested_at)}</td>
+                  </tr>
+                  {datasetRelease.source_url && (
+                    <tr className="border-b">
+                      <td className="py-2 font-medium text-muted-foreground">Source</td>
+                      <td className="py-2">{datasetRelease.source_url}</td>
+                    </tr>
+                  )}
+                  {computeRun && (
+                    <>
+                      <tr className="border-b">
+                        <td className="py-2 font-medium text-muted-foreground">Rule Version</td>
+                        <td className="py-2 font-mono text-xs">{computeRun.rule_set_version}</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 font-medium text-muted-foreground">Compute Run ID</td>
+                        <td className="py-2 font-mono text-xs">{computeRun.id}</td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {/* Statistical Summary - Per Year */}
           <section>
             <h2 className="mb-3 text-lg font-semibold">Statistical Summary</h2>
-            <p className="mb-4 text-sm">
-              This provider's total allowed amount ranked at or above the 99.5th percentile 
-              within their peer group (same specialty and state) for both 2023 and 2024.
-            </p>
+            {anomalyFlagV2 && (
+              <p className="mb-4 text-sm">
+                This provider's total allowed amount ranked at or above the {anomalyFlagV2.threshold_percentile_required}th percentile 
+                within their peer group ({anomalyFlagV2.peer_group_key}) for {anomalyFlagV2.consecutive_years_required} consecutive years.
+                {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
+                  <span className="block mt-2 text-amber-600">
+                    <strong>Note:</strong> {anomalyFlagV2.flag_reason}
+                  </span>
+                )}
+              </p>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="py-2 text-left font-medium">Metric</th>
-                  <th className="py-2 text-right font-medium">2023</th>
-                  <th className="py-2 text-right font-medium">2024</th>
+                  {uniqueYears.map(year => (
+                    <th key={year} className="py-2 text-right font-medium">{year}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b">
                   <td className="py-2 font-medium">Provider Total Allowed Amount</td>
-                  <td className="py-2 text-right">{metric2023 ? formatCurrency(Number(metric2023.total_allowed_amount)) : '-'}</td>
-                  <td className="py-2 text-right">{metric2024 ? formatCurrency(Number(metric2024.total_allowed_amount)) : '-'}</td>
+                  {uniqueYears.map(year => {
+                    const metric = metrics.find(m => m.year === year);
+                    return (
+                      <td key={year} className="py-2 text-right">
+                        {metric ? formatCurrency(Number(metric.total_allowed_amount)) : '-'}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr className="border-b">
                   <td className="py-2 font-medium">Provider Percentile Rank</td>
-                  <td className="py-2 text-right">{formatPercentile(anomalyFlag.percentile_2023)}</td>
-                  <td className="py-2 text-right">{formatPercentile(anomalyFlag.percentile_2024)}</td>
+                  {uniqueYears.map(year => {
+                    const flagYear = flagYears.find(fy => fy.year === year);
+                    return (
+                      <td key={year} className="py-2 text-right">
+                        {flagYear ? formatPercentile(Number(flagYear.percentile_rank)) : '-'}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr className="border-b">
                   <td className="py-2 font-medium">Peer Group Size</td>
-                  <td className="py-2 text-right" colSpan={2}>{anomalyFlag.peer_group_size} providers</td>
+                  {uniqueYears.map(year => {
+                    const flagYear = flagYears.find(fy => fy.year === year);
+                    return (
+                      <td key={year} className="py-2 text-right">
+                        {flagYear ? `${flagYear.peer_size} providers` : '-'}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr className="border-b">
                   <td className="py-2 font-medium">Peer Group Median</td>
-                  <td className="py-2 text-right">{stats2023 ? formatCurrency(stats2023.median) : '-'}</td>
-                  <td className="py-2 text-right">{stats2024 ? formatCurrency(stats2024.median) : '-'}</td>
+                  {uniqueYears.map(year => {
+                    const stats = peerStats.find(s => s.year === year);
+                    return (
+                      <td key={year} className="py-2 text-right">
+                        {stats ? formatCurrency(stats.median) : '-'}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr className="border-b">
                   <td className="py-2 font-medium">99.5th Percentile Threshold</td>
-                  <td className="py-2 text-right">{formatCurrency(Number(anomalyFlag.threshold_2023))}</td>
-                  <td className="py-2 text-right">{formatCurrency(Number(anomalyFlag.threshold_2024))}</td>
+                  {uniqueYears.map(year => {
+                    const flagYear = flagYears.find(fy => fy.year === year);
+                    return (
+                      <td key={year} className="py-2 text-right">
+                        {flagYear ? formatCurrency(Number(flagYear.p995_threshold)) : '-'}
+                      </td>
+                    );
+                  })}
                 </tr>
               </tbody>
             </table>
           </section>
 
+          {/* Low Sample Warning */}
+          {hasLowSampleYear && (
+            <section className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-amber-700">Low Sample Size Notice</h3>
+                  <p className="text-sm text-amber-700">
+                    This peer group contains fewer than {anomalyFlagV2?.min_peer_size_required || 20} providers 
+                    in one or more analysis years. Statistical significance of percentile rankings may be limited.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Methodology Reference */}
           <section>
             <h2 className="mb-3 text-lg font-semibold">Methodology</h2>
             <p className="text-sm">
-              Peer groups are defined by specialty and state. Percentile rank is calculated 
-              using the PERCENT_RANK function on total allowed amounts within each peer group 
-              for each calendar year. A provider is flagged only if their percentile rank is 
-              at or above 99.5 for both 2023 and 2024. This two-year consistency requirement 
-              reduces the likelihood of flagging one-time statistical anomalies.
+              Peer groups are defined by {anomalyFlagV2?.peer_group_key || 'specialty and state'}. 
+              Percentile rank is calculated using the PERCENT_RANK function on {anomalyFlagV2?.metric_name || 'total allowed amounts'} 
+              within each peer group for each calendar year. A provider is flagged only if their percentile rank is 
+              at or above {anomalyFlagV2?.threshold_percentile_required || 99.5} for {anomalyFlagV2?.consecutive_years_required || 2} consecutive years, 
+              and only if the peer group contains at least {anomalyFlagV2?.min_peer_size_required || 20} providers.
             </p>
-            <p className="mt-2 text-sm">
-              <strong>Rule Version:</strong> {anomalyFlag.rule_version} | 
-              <strong> Computed:</strong> {new Date(anomalyFlag.computed_at).toLocaleDateString()}
-            </p>
+            {anomalyFlagV2 && (
+              <p className="mt-2 text-sm">
+                <strong>Rule Version:</strong> {anomalyFlagV2.rule_set_version} | 
+                <strong> Computed:</strong> {formatDate(anomalyFlagV2.computed_at)}
+              </p>
+            )}
           </section>
 
           {/* Disclaimer */}
-          <section className="rounded-lg border border-warning/50 bg-warning/10 p-4">
+          <section className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
             <h2 className="mb-2 font-semibold">Important Disclaimer</h2>
             <p className="text-sm">
               This report identifies statistical outliers based on publicly available Medicare 

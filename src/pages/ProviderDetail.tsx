@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, AlertTriangle, FileText, Printer, Info, TrendingUp } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Database, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { PeerDistributionChart } from '@/components/PeerDistributionChart';
 import { YearlyComparisonChart } from '@/components/YearlyComparisonChart';
 import { ProviderBrief } from '@/components/ProviderBrief';
+import { PossibleExplanations } from '@/components/PossibleExplanations';
+import { DataLineagePanel } from '@/components/DataLineagePanel';
 import { useState, useEffect } from 'react';
 
 interface Provider {
@@ -20,18 +22,33 @@ interface Provider {
   state: string;
 }
 
-interface AnomalyFlag {
+interface AnomalyFlagV2 {
   id: string;
   provider_id: string;
-  specialty: string;
-  state: string;
-  percentile_2023: number;
-  percentile_2024: number;
-  threshold_2023: number;
-  threshold_2024: number;
-  peer_group_size: number;
-  rule_version: string;
+  normalized_specialty: string;
+  normalized_state: string;
+  flagged: boolean;
+  flag_reason: string | null;
+  metric_name: string;
+  rule_set_version: string;
+  peer_group_key: string;
+  peer_group_version: string;
+  threshold_percentile_required: number;
+  min_peer_size_required: number;
+  consecutive_years_required: number;
   computed_at: string;
+  dataset_release_id: string;
+  compute_run_id: string | null;
+}
+
+interface AnomalyFlagYear {
+  id: string;
+  anomaly_flag_id: string;
+  year: number;
+  percentile_rank: number;
+  peer_size: number;
+  value: number;
+  p995_threshold: number;
 }
 
 interface Metric {
@@ -46,6 +63,24 @@ interface PeerStats {
   p99: number;
   p995: number;
   mean: number;
+  peer_size: number;
+}
+
+interface DatasetRelease {
+  id: string;
+  release_label: string;
+  dataset_key: string;
+  status: string;
+  ingested_at: string | null;
+  source_url: string | null;
+}
+
+interface ComputeRun {
+  id: string;
+  rule_set_version: string;
+  status: string;
+  finished_at: string | null;
+  parameters_json: Record<string, unknown>;
 }
 
 export default function ProviderDetail() {
@@ -83,19 +118,67 @@ export default function ProviderDetail() {
     enabled: !!id
   });
 
-  // Fetch anomaly flag for this provider
-  const { data: anomalyFlag } = useQuery({
-    queryKey: ['anomaly-flag', id],
+  // Fetch anomaly flag v2 for this provider
+  const { data: anomalyFlagV2 } = useQuery({
+    queryKey: ['anomaly-flag-v2', id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('anomaly_flags')
+        .from('anomaly_flags_v2')
         .select('*')
         .eq('provider_id', id)
         .maybeSingle();
       if (error) throw error;
-      return data as AnomalyFlag | null;
+      return data as AnomalyFlagV2 | null;
     },
     enabled: !!id
+  });
+
+  // Fetch anomaly flag years
+  const { data: flagYears } = useQuery({
+    queryKey: ['anomaly-flag-years', anomalyFlagV2?.id],
+    queryFn: async () => {
+      if (!anomalyFlagV2) return [];
+      const { data, error } = await supabase
+        .from('anomaly_flag_years')
+        .select('*')
+        .eq('anomaly_flag_id', anomalyFlagV2.id)
+        .order('year');
+      if (error) throw error;
+      return data as AnomalyFlagYear[];
+    },
+    enabled: !!anomalyFlagV2?.id
+  });
+
+  // Fetch dataset release
+  const { data: datasetRelease } = useQuery({
+    queryKey: ['dataset-release', anomalyFlagV2?.dataset_release_id],
+    queryFn: async () => {
+      if (!anomalyFlagV2?.dataset_release_id) return null;
+      const { data, error } = await supabase
+        .from('dataset_releases')
+        .select('*')
+        .eq('id', anomalyFlagV2.dataset_release_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as DatasetRelease | null;
+    },
+    enabled: !!anomalyFlagV2?.dataset_release_id
+  });
+
+  // Fetch compute run
+  const { data: computeRun } = useQuery({
+    queryKey: ['compute-run', anomalyFlagV2?.compute_run_id],
+    queryFn: async () => {
+      if (!anomalyFlagV2?.compute_run_id) return null;
+      const { data, error } = await supabase
+        .from('compute_runs')
+        .select('*')
+        .eq('id', anomalyFlagV2.compute_run_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as ComputeRun | null;
+    },
+    enabled: !!anomalyFlagV2?.compute_run_id
   });
 
   // Fetch this provider's metrics
@@ -113,13 +196,30 @@ export default function ProviderDetail() {
     enabled: !!id
   });
 
+  // Fetch peer group stats from pre-computed table
+  const { data: peerGroupStats } = useQuery({
+    queryKey: ['peer-group-stats', provider?.specialty, provider?.state, datasetRelease?.id],
+    queryFn: async () => {
+      if (!provider || !datasetRelease) return [];
+      const { data, error } = await supabase
+        .from('peer_group_stats')
+        .select('*')
+        .eq('dataset_release_id', datasetRelease.id)
+        .eq('normalized_specialty', provider.specialty)
+        .eq('normalized_state', provider.state)
+        .order('year');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!provider && !!datasetRelease
+  });
+
   // Fetch peer group distribution for histogram
   const { data: peerDistribution } = useQuery({
     queryKey: ['peer-distribution', provider?.specialty, provider?.state],
     queryFn: async () => {
       if (!provider) return null;
       
-      // Get all providers in the same peer group
       const { data: peers, error: peersError } = await supabase
         .from('providers')
         .select('id')
@@ -130,7 +230,6 @@ export default function ProviderDetail() {
       
       const peerIds = peers.map(p => p.id);
       
-      // Get all their metrics
       const { data: metrics, error: metricsError } = await supabase
         .from('provider_yearly_metrics')
         .select('provider_id, year, total_allowed_amount')
@@ -143,31 +242,42 @@ export default function ProviderDetail() {
     enabled: !!provider
   });
 
-  // Calculate peer stats
-  const peerStats: PeerStats[] = peerDistribution 
-    ? [2023, 2024].map(year => {
-        const yearMetrics = peerDistribution
-          .filter(m => m.year === year)
-          .map(m => Number(m.total_allowed_amount))
-          .sort((a, b) => a - b);
-        
-        if (yearMetrics.length === 0) {
-          return { year, median: 0, p95: 0, p99: 0, p995: 0, mean: 0 };
-        }
-        
-        const n = yearMetrics.length;
-        const sum = yearMetrics.reduce((a, b) => a + b, 0);
-        
-        return {
-          year,
-          median: yearMetrics[Math.floor(n * 0.5)],
-          p95: yearMetrics[Math.floor(n * 0.95)],
-          p99: yearMetrics[Math.floor(n * 0.99)],
-          p995: yearMetrics[Math.floor(n * 0.995)],
-          mean: sum / n
-        };
-      })
-    : [];
+  // Calculate peer stats from pre-computed data or live data
+  const peerStats: PeerStats[] = peerGroupStats && peerGroupStats.length > 0
+    ? peerGroupStats.map(s => ({
+        year: s.year,
+        median: Number(s.p50) || 0,
+        p95: Number(s.p95) || 0,
+        p99: Number(s.p99) || 0,
+        p995: Number(s.p995) || 0,
+        mean: Number(s.mean) || 0,
+        peer_size: s.peer_size
+      }))
+    : peerDistribution 
+      ? [2023, 2024].map(year => {
+          const yearMetrics = peerDistribution
+            .filter(m => m.year === year)
+            .map(m => Number(m.total_allowed_amount))
+            .sort((a, b) => a - b);
+          
+          if (yearMetrics.length === 0) {
+            return { year, median: 0, p95: 0, p99: 0, p995: 0, mean: 0, peer_size: 0 };
+          }
+          
+          const n = yearMetrics.length;
+          const sum = yearMetrics.reduce((a, b) => a + b, 0);
+          
+          return {
+            year,
+            median: yearMetrics[Math.floor(n * 0.5)],
+            p95: yearMetrics[Math.floor(n * 0.95)],
+            p99: yearMetrics[Math.floor(n * 0.99)],
+            p995: yearMetrics[Math.floor(n * 0.995)],
+            mean: sum / n,
+            peer_size: n
+          };
+        })
+      : [];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -181,6 +291,8 @@ export default function ProviderDetail() {
   const formatPercentile = (value: number) => {
     return `${value.toFixed(1)}th`;
   };
+
+  const hasLowSampleYear = flagYears?.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
 
   if (providerLoading) {
     return (
@@ -233,46 +345,135 @@ export default function ProviderDetail() {
                 NPI: {provider.npi} • {provider.specialty} • {provider.state}
               </CardDescription>
             </div>
-            {anomalyFlag && (
-              <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
-                <AlertTriangle className="h-4 w-4" />
-                Flagged
-              </Badge>
+            {anomalyFlagV2 && (
+              anomalyFlagV2.flagged ? (
+                <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  Flagged
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 text-amber-600 border-amber-600">
+                  <Info className="h-4 w-4" />
+                  Suppressed
+                </Badge>
+              )
             )}
           </div>
         </CardHeader>
-        {anomalyFlag && (
+        {anomalyFlagV2 && flagYears && flagYears.length > 0 && (
           <CardContent>
             <div className="flex flex-wrap gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">2023 Percentile Rank: </span>
-                <span className="font-semibold">{formatPercentile(anomalyFlag.percentile_2023)}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">2024 Percentile Rank: </span>
-                <span className="font-semibold">{formatPercentile(anomalyFlag.percentile_2024)}</span>
-              </div>
+              {flagYears.map(fy => (
+                <div key={fy.year}>
+                  <span className="text-muted-foreground">{fy.year} Percentile Rank: </span>
+                  <span className="font-semibold">{formatPercentile(Number(fy.percentile_rank))}</span>
+                </div>
+              ))}
               <div>
                 <span className="text-muted-foreground">Peer Group Size: </span>
-                <span className="font-semibold">{anomalyFlag.peer_group_size} providers</span>
+                <span className="font-semibold">
+                  {flagYears[0]?.peer_size || '-'} providers
+                </span>
               </div>
             </div>
+            {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
+              <div className="mt-3 text-sm text-muted-foreground">
+                <span className="font-medium">Reason: </span>
+                {anomalyFlagV2.flag_reason}
+              </div>
+            )}
           </CardContent>
         )}
       </Card>
 
+      {/* Data Lineage */}
+      <DataLineagePanel 
+        datasetRelease={datasetRelease || null} 
+        computeRun={computeRun || null} 
+      />
+
       {/* Small Peer Group Warning */}
-      {anomalyFlag && anomalyFlag.peer_group_size < 20 && (
-        <Card className="border-warning/50 bg-warning/10">
+      {hasLowSampleYear && (
+        <Card className="border-amber-500/50 bg-amber-500/10">
           <CardContent className="flex items-center gap-3 py-4">
-            <Info className="h-5 w-5 text-warning" />
+            <Info className="h-5 w-5 text-amber-500" />
             <p className="text-sm">
-              This peer group contains only <strong>{anomalyFlag.peer_group_size}</strong> providers. 
-              Statistical significance of percentile rankings is limited for small groups.
+              This peer group contains fewer than <strong>{anomalyFlagV2?.min_peer_size_required || 20}</strong> providers in one or more years. 
+              Statistical significance of percentile rankings may be limited.
             </p>
           </CardContent>
         </Card>
       )}
+
+      {/* Per-Year Breakdown Table */}
+      {flagYears && flagYears.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Clock className="h-5 w-5" />
+              Per-Year Statistical Breakdown
+            </CardTitle>
+            <CardDescription>
+              Detailed metrics for each analysis year
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Year</TableHead>
+                  <TableHead className="text-right">Provider Value</TableHead>
+                  <TableHead className="text-right">Percentile Rank</TableHead>
+                  <TableHead className="text-right">Peer Size</TableHead>
+                  <TableHead className="text-right">99.5th Threshold</TableHead>
+                  <TableHead className="text-center">Met Threshold</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flagYears.map(fy => {
+                  const meetsThreshold = Number(fy.percentile_rank) >= (anomalyFlagV2?.threshold_percentile_required || 99.5);
+                  const isLowSample = fy.peer_size < (anomalyFlagV2?.min_peer_size_required || 20);
+                  
+                  return (
+                    <TableRow key={fy.year}>
+                      <TableCell className="font-medium">{fy.year}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(Number(fy.value))}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant={meetsThreshold ? 'destructive' : 'secondary'} className="font-mono">
+                          {formatPercentile(Number(fy.percentile_rank))}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {isLowSample && <Info className="h-3 w-3 text-amber-500" />}
+                          <span className={isLowSample ? 'text-amber-500' : ''}>
+                            {fy.peer_size}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(Number(fy.p995_threshold))}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {meetsThreshold ? (
+                          <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-muted-foreground mx-auto" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Possible Explanations */}
+      {anomalyFlagV2 && <PossibleExplanations />}
 
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -341,63 +542,80 @@ export default function ProviderDetail() {
             <TableHeader>
               <TableRow>
                 <TableHead>Statistic</TableHead>
-                <TableHead className="text-right">2023</TableHead>
-                <TableHead className="text-right">2024</TableHead>
+                {peerStats.map(s => (
+                  <TableHead key={s.year} className="text-right">{s.year}</TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
                 <TableCell className="font-medium">Peer Group Size</TableCell>
-                <TableCell className="text-right">{anomalyFlag?.peer_group_size || '-'}</TableCell>
-                <TableCell className="text-right">{anomalyFlag?.peer_group_size || '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{s.peer_size}</TableCell>
+                ))}
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Median</TableCell>
-                <TableCell className="text-right">{peerStats[0] ? formatCurrency(peerStats[0].median) : '-'}</TableCell>
-                <TableCell className="text-right">{peerStats[1] ? formatCurrency(peerStats[1].median) : '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{formatCurrency(s.median)}</TableCell>
+                ))}
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Mean</TableCell>
-                <TableCell className="text-right">{peerStats[0] ? formatCurrency(peerStats[0].mean) : '-'}</TableCell>
-                <TableCell className="text-right">{peerStats[1] ? formatCurrency(peerStats[1].mean) : '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{formatCurrency(s.mean)}</TableCell>
+                ))}
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">95th Percentile</TableCell>
-                <TableCell className="text-right">{peerStats[0] ? formatCurrency(peerStats[0].p95) : '-'}</TableCell>
-                <TableCell className="text-right">{peerStats[1] ? formatCurrency(peerStats[1].p95) : '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p95)}</TableCell>
+                ))}
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">99th Percentile</TableCell>
-                <TableCell className="text-right">{peerStats[0] ? formatCurrency(peerStats[0].p99) : '-'}</TableCell>
-                <TableCell className="text-right">{peerStats[1] ? formatCurrency(peerStats[1].p99) : '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p99)}</TableCell>
+                ))}
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">99.5th Percentile (Threshold)</TableCell>
-                <TableCell className="text-right">{anomalyFlag ? formatCurrency(Number(anomalyFlag.threshold_2023)) : '-'}</TableCell>
-                <TableCell className="text-right">{anomalyFlag ? formatCurrency(Number(anomalyFlag.threshold_2024)) : '-'}</TableCell>
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p995)}</TableCell>
+                ))}
               </TableRow>
               <TableRow className="bg-muted/50 font-semibold">
                 <TableCell>This Provider</TableCell>
                 <TableCell className="text-right">{formatCurrency(Number(providerAmount2023))}</TableCell>
-                <TableCell className="text-right">{formatCurrency(Number(providerAmount2024))}</TableCell>
+                {peerStats.length > 1 && (
+                  <TableCell className="text-right">{formatCurrency(Number(providerAmount2024))}</TableCell>
+                )}
               </TableRow>
-              <TableRow className="bg-muted/50 font-semibold">
-                <TableCell>This Provider's Percentile Rank</TableCell>
-                <TableCell className="text-right">{anomalyFlag ? formatPercentile(anomalyFlag.percentile_2023) : '-'}</TableCell>
-                <TableCell className="text-right">{anomalyFlag ? formatPercentile(anomalyFlag.percentile_2024) : '-'}</TableCell>
-              </TableRow>
+              {flagYears && flagYears.length > 0 && (
+                <TableRow className="bg-muted/50 font-semibold">
+                  <TableCell>This Provider's Percentile Rank</TableCell>
+                  {flagYears.map(fy => (
+                    <TableCell key={fy.year} className="text-right">
+                      {formatPercentile(Number(fy.percentile_rank))}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
       {/* Brief Modal */}
-      {showBrief && provider && anomalyFlag && (
+      {showBrief && provider && (
         <ProviderBrief
           provider={provider}
-          anomalyFlag={anomalyFlag}
+          anomalyFlagV2={anomalyFlagV2}
+          flagYears={flagYears || []}
           metrics={providerMetrics || []}
           peerStats={peerStats}
+          datasetRelease={datasetRelease}
+          computeRun={computeRun}
           onClose={() => setShowBrief(false)}
         />
       )}
