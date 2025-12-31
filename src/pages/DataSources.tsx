@@ -52,7 +52,7 @@ export default function DataSources() {
             <h4 className="mb-2 font-medium">Data Refresh</h4>
             <p className="text-sm text-muted-foreground">
               CMS typically releases this data annually, with a 1-2 year lag. 
-              Our analysis currently covers calendar years 2023 and 2024.
+              Our analysis covers the years included in the active dataset release.
             </p>
           </div>
 
@@ -96,8 +96,8 @@ export default function DataSources() {
             <h4 className="mb-2 font-medium">Percentile Calculation</h4>
             <p className="text-sm text-muted-foreground">
               Within each peer group, we calculate the percentile rank of each provider's 
-              total allowed amount. Providers above the 99.5th percentile in both 
-              2023 and 2024 are flagged for review.
+              total allowed amount. Providers above the 99.5th percentile across all 
+              consecutive years in the analysis window are flagged for review.
             </p>
           </div>
         </CardContent>

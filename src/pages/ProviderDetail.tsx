@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Database, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { PeerDistributionChart } from '@/components/PeerDistributionChart';
 import { YearlyComparisonChart } from '@/components/YearlyComparisonChart';
 import { ProviderBrief } from '@/components/ProviderBrief';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { DataLineagePanel } from '@/components/DataLineagePanel';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 interface Provider {
   id: string;
@@ -242,6 +242,12 @@ export default function ProviderDetail() {
     enabled: !!provider
   });
 
+  // Derive unique years from peer distribution data for fallback calculation
+  const peerDistributionYears = useMemo(() => {
+    if (!peerDistribution) return [];
+    return [...new Set(peerDistribution.map(m => m.year))].sort((a, b) => a - b);
+  }, [peerDistribution]);
+
   // Calculate peer stats from pre-computed data or live data
   const peerStats: PeerStats[] = peerGroupStats && peerGroupStats.length > 0
     ? peerGroupStats.map(s => ({
@@ -254,7 +260,7 @@ export default function ProviderDetail() {
         peer_size: s.peer_size
       }))
     : peerDistribution 
-      ? [2023, 2024].map(year => {
+      ? peerDistributionYears.map(year => {
           const yearMetrics = peerDistribution
             .filter(m => m.year === year)
             .map(m => Number(m.total_allowed_amount))
@@ -278,6 +284,17 @@ export default function ProviderDetail() {
           };
         })
       : [];
+
+  // Get provider amount for a given year
+  const getProviderAmount = (year: number): number => {
+    return Number(providerMetrics?.find(m => m.year === year)?.total_allowed_amount || 0);
+  };
+
+  // Get the latest year from peer distribution for the histogram
+  const latestYear = useMemo(() => {
+    if (!peerDistribution || peerDistribution.length === 0) return null;
+    return Math.max(...peerDistribution.map(m => m.year));
+  }, [peerDistribution]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -317,9 +334,6 @@ export default function ProviderDetail() {
       </div>
     );
   }
-
-  const providerAmount2023 = providerMetrics?.find(m => m.year === 2023)?.total_allowed_amount || 0;
-  const providerAmount2024 = providerMetrics?.find(m => m.year === 2024)?.total_allowed_amount || 0;
 
   return (
     <div className="space-y-6">
@@ -486,14 +500,15 @@ export default function ProviderDetail() {
             </CardTitle>
             <CardDescription>
               Distribution of total allowed amounts for {provider.specialty} providers in {provider.state}
+              {latestYear && ` (${latestYear})`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {peerDistribution && peerDistribution.length > 0 ? (
+            {peerDistribution && peerDistribution.length > 0 && latestYear ? (
               <PeerDistributionChart
-                peerData={peerDistribution.filter(m => m.year === 2024).map(m => Number(m.total_allowed_amount))}
-                providerAmount={Number(providerAmount2024)}
-                year={2024}
+                peerData={peerDistribution.filter(m => m.year === latestYear).map(m => Number(m.total_allowed_amount))}
+                providerAmount={getProviderAmount(latestYear)}
+                year={latestYear}
               />
             ) : (
               <div className="flex h-[300px] items-center justify-center text-muted-foreground">
@@ -586,10 +601,11 @@ export default function ProviderDetail() {
               </TableRow>
               <TableRow className="bg-muted/50 font-semibold">
                 <TableCell>This Provider</TableCell>
-                <TableCell className="text-right">{formatCurrency(Number(providerAmount2023))}</TableCell>
-                {peerStats.length > 1 && (
-                  <TableCell className="text-right">{formatCurrency(Number(providerAmount2024))}</TableCell>
-                )}
+                {peerStats.map(s => (
+                  <TableCell key={s.year} className="text-right">
+                    {formatCurrency(getProviderAmount(s.year))}
+                  </TableCell>
+                ))}
               </TableRow>
               {flagYears && flagYears.length > 0 && (
                 <TableRow className="bg-muted/50 font-semibold">

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface YearlyComparisonChartProps {
@@ -6,16 +7,24 @@ interface YearlyComparisonChartProps {
 }
 
 export function YearlyComparisonChart({ providerMetrics, peerMedians }: YearlyComparisonChartProps) {
-  const data = [2023, 2024].map(year => {
-    const providerData = providerMetrics.find(m => m.year === year);
-    const medianData = peerMedians.find(m => m.year === year);
-    
-    return {
-      year: year.toString(),
-      provider: providerData?.amount || 0,
-      median: medianData?.median || 0
-    };
-  });
+  // Derive unique years from both data sources
+  const data = useMemo(() => {
+    const years = [...new Set([
+      ...providerMetrics.map(m => m.year),
+      ...peerMedians.map(m => m.year)
+    ])].sort((a, b) => a - b);
+
+    return years.map(year => {
+      const providerData = providerMetrics.find(m => m.year === year);
+      const medianData = peerMedians.find(m => m.year === year);
+      
+      return {
+        year: year.toString(),
+        provider: providerData?.amount || 0,
+        median: medianData?.median || 0
+      };
+    });
+  }, [providerMetrics, peerMedians]);
 
   const formatValue = (value: number) => {
     if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -164,6 +164,23 @@ export default function Dashboard() {
     }
   });
 
+  // Derive unique years from flagged providers data
+  const uniqueYears = useMemo(() => {
+    if (!flaggedProviders || flaggedProviders.length === 0) return [];
+    const years = new Set<number>();
+    flaggedProviders.forEach(fp => {
+      fp.anomaly_flag_years?.forEach(fy => years.add(fy.year));
+    });
+    return Array.from(years).sort((a, b) => a - b);
+  }, [flaggedProviders]);
+
+  // Format year range for display
+  const yearRangeDisplay = useMemo(() => {
+    if (uniqueYears.length === 0) return '--';
+    if (uniqueYears.length === 1) return uniqueYears[0].toString();
+    return `${uniqueYears[0]}-${uniqueYears[uniqueYears.length - 1]}`;
+  }, [uniqueYears]);
+
   const formatPercentile = (value: number) => {
     return `${Number(value).toFixed(1)}th`;
   };
@@ -245,7 +262,7 @@ export default function Dashboard() {
               {flaggedLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : flaggedCount}
             </div>
             <p className="text-xs text-muted-foreground">
-              ≥99.5th percentile rank (2 years)
+              ≥99.5th percentile rank ({uniqueYears.length || '--'} consecutive years)
             </p>
           </CardContent>
         </Card>
@@ -282,7 +299,7 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2023-2024</div>
+            <div className="text-2xl font-bold">{yearRangeDisplay}</div>
             <p className="text-xs text-muted-foreground">
               Consecutive years analyzed
             </p>
@@ -297,7 +314,7 @@ export default function Dashboard() {
             <div>
               <CardTitle>Statistical Outliers</CardTitle>
               <CardDescription>
-                Providers with total allowed amount at or above the 99.5th percentile rank of their peer group for both 2023 and 2024.
+                Providers with total allowed amount at or above the 99.5th percentile rank of their peer group for all consecutive years in the analysis window.
                 Click a row to view details.
               </CardDescription>
             </div>
@@ -337,8 +354,9 @@ export default function Dashboard() {
                   <TableHead>NPI</TableHead>
                   <TableHead>Specialty</TableHead>
                   <TableHead>State</TableHead>
-                  <TableHead className="text-right">2023 Percentile</TableHead>
-                  <TableHead className="text-right">2024 Percentile</TableHead>
+                  {uniqueYears.map(year => (
+                    <TableHead key={year} className="text-right">{year} Percentile</TableHead>
+                  ))}
                   <TableHead className="text-right">Min Peer Size</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -346,8 +364,6 @@ export default function Dashboard() {
               <TableBody>
                 {flaggedProviders.map((flag) => {
                   const minPeerSize = getMinPeerSize(flag);
-                  const percentile2023 = getPercentileForYear(flag, 2023);
-                  const percentile2024 = getPercentileForYear(flag, 2024);
                   const isLowSample = minPeerSize !== null && minPeerSize < 20;
 
                   return (
@@ -364,20 +380,18 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell>{flag.normalized_specialty}</TableCell>
                       <TableCell>{flag.normalized_state}</TableCell>
-                      <TableCell className="text-right">
-                        {percentile2023 !== undefined ? (
-                          <Badge variant={flag.flagged ? 'destructive' : 'secondary'} className="font-mono">
-                            {formatPercentile(percentile2023)}
-                          </Badge>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {percentile2024 !== undefined ? (
-                          <Badge variant={flag.flagged ? 'destructive' : 'secondary'} className="font-mono">
-                            {formatPercentile(percentile2024)}
-                          </Badge>
-                        ) : '-'}
-                      </TableCell>
+                      {uniqueYears.map(year => {
+                        const percentile = getPercentileForYear(flag, year);
+                        return (
+                          <TableCell key={year} className="text-right">
+                            {percentile !== undefined ? (
+                              <Badge variant={flag.flagged ? 'destructive' : 'secondary'} className="font-mono">
+                                {formatPercentile(percentile)}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+                        );
+                      })}
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {isLowSample && (
