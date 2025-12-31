@@ -1,16 +1,16 @@
 project_id = "tuhfkanamlxzokimvofd"
 
 [functions.generate-invite]
-verify_jwt = true
+verify_jwt = false
 
 [functions.accept-invite]
 verify_jwt = false
 
 [functions.list-users]
-verify_jwt = true
+verify_jwt = false
 
 [functions.seed-synthetic-data]
-verify_jwt = true
+verify_jwt = false
 
 [functions.recompute-anomalies]
-verify_jwt = true
+verify_jwt = false
