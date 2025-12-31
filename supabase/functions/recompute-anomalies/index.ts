@@ -89,33 +89,45 @@ Deno.serve(async (req) => {
     // Determine years window - default to latest 2 years in the release
     let yearsWindow = body.yearsWindow;
     if (!yearsWindow || yearsWindow.length === 0) {
-      const { data: yearsData, error: yearsError } = await supabaseAdmin
+      // Get the latest year (1 row only - avoids 1000 row limit issue)
+      const { data: maxYearData, error: maxYearError } = await supabaseAdmin
         .from('provider_yearly_metrics')
         .select('year')
         .eq('dataset_release_id', datasetReleaseId)
-        .order('year', { ascending: false });
-      
-      if (yearsError || !yearsData || yearsData.length === 0) {
-        // Fallback: check provider_attributes
-        const { data: attrYears } = await supabaseAdmin
-          .from('provider_attributes')
-          .select('year')
-          .eq('dataset_release_id', datasetReleaseId)
-          .order('year', { ascending: false });
-        
-        if (!attrYears || attrYears.length === 0) {
-          return new Response(
-            JSON.stringify({ error: 'No data found for the specified dataset release' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        const uniqueYears = [...new Set(attrYears.map(y => y.year))].sort((a, b) => b - a);
-        yearsWindow = uniqueYears.slice(0, 2).sort((a, b) => a - b);
-      } else {
-        const uniqueYears = [...new Set(yearsData.map(y => y.year))].sort((a, b) => b - a);
-        yearsWindow = uniqueYears.slice(0, 2).sort((a, b) => a - b);
+        .order('year', { ascending: false })
+        .limit(1);
+
+      if (maxYearError || !maxYearData || maxYearData.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'No data found for the specified dataset release' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
+
+      const maxYear = maxYearData[0].year;
+
+      // Get the second latest year (1 row only)
+      const { data: secondYearData } = await supabaseAdmin
+        .from('provider_yearly_metrics')
+        .select('year')
+        .eq('dataset_release_id', datasetReleaseId)
+        .lt('year', maxYear)
+        .order('year', { ascending: false })
+        .limit(1);
+
+      const secondYear = secondYearData?.[0]?.year;
+
+      if (!secondYear) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Insufficient data: Found only 1 year (${maxYear}). At least 2 consecutive years are required for anomaly detection.`,
+            years_found: [maxYear]
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      yearsWindow = [secondYear, maxYear]; // Already sorted ascending
     }
 
     // Set defaults for other parameters
