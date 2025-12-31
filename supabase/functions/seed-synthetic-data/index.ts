@@ -52,6 +52,11 @@ const SPECIALTIES = [
   'Hematology'
 ];
 
+// States with varied weights to create different peer group sizes
+// Large states: many providers (peer groups > 30)
+// Medium states: moderate providers (peer groups 20-30)
+// Small states: few providers (peer groups 10-19, should be suppressed)
+// Rare states: very few providers (peer groups 5-9)
 const STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
   'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
@@ -60,21 +65,24 @@ const STATES = [
   'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
 ];
 
-// State weights (higher population states get more providers)
+// Adjusted weights to create varied peer group sizes for guardrail testing
 const STATE_WEIGHTS: Record<string, number> = {
-  'CA': 12, 'TX': 10, 'FL': 9, 'NY': 9, 'PA': 6,
-  'IL': 5, 'OH': 5, 'GA': 4, 'NC': 4, 'MI': 4,
-  'NJ': 4, 'VA': 3, 'WA': 3, 'AZ': 3, 'MA': 3,
-  'TN': 3, 'IN': 2, 'MO': 2, 'MD': 2, 'WI': 2,
-  'CO': 2, 'MN': 2, 'SC': 2, 'AL': 2, 'LA': 2,
-  'KY': 2, 'OR': 2, 'OK': 1, 'CT': 1, 'UT': 1,
-  'IA': 1, 'NV': 1, 'AR': 1, 'MS': 1, 'KS': 1,
-  'NM': 1, 'NE': 1, 'ID': 1, 'WV': 1, 'HI': 1,
-  'NH': 1, 'ME': 1, 'MT': 1, 'RI': 1, 'DE': 1,
-  'SD': 1, 'ND': 1, 'AK': 1, 'VT': 1, 'WY': 1
+  // Large states - will have adequate peer groups
+  'CA': 15, 'TX': 12, 'FL': 11, 'NY': 11, 'PA': 8,
+  'IL': 7, 'OH': 7, 'GA': 6, 'NC': 6, 'MI': 6,
+  // Medium states - borderline peer groups
+  'NJ': 5, 'VA': 4, 'WA': 4, 'AZ': 4, 'MA': 4,
+  'TN': 3, 'IN': 3, 'MO': 3, 'MD': 3, 'WI': 3,
+  'CO': 3, 'MN': 3, 'SC': 2, 'AL': 2, 'LA': 2,
+  // Smaller states - will create low-sample peer groups
+  'KY': 1.5, 'OR': 1.5, 'OK': 1.2, 'CT': 1.2, 'UT': 1,
+  'IA': 1, 'NV': 1, 'AR': 1, 'MS': 1, 'KS': 0.8,
+  // Very small states - will create very low-sample groups
+  'NM': 0.5, 'NE': 0.5, 'ID': 0.4, 'WV': 0.4, 'HI': 0.4,
+  'NH': 0.3, 'ME': 0.3, 'MT': 0.25, 'RI': 0.25, 'DE': 0.2,
+  'SD': 0.15, 'ND': 0.15, 'AK': 0.1, 'VT': 0.1, 'WY': 0.08
 };
 
-// First and last name parts for realistic provider names
 const FIRST_NAMES = [
   'James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph',
   'Thomas', 'Charles', 'Christopher', 'Daniel', 'Matthew', 'Anthony', 'Mark',
@@ -99,7 +107,6 @@ const LAST_NAMES = [
 ];
 
 function generateNPI(rand: () => number, index: number): string {
-  // NPIs start with 1 or 2, followed by 9 digits
   const prefix = Math.floor(rand() * 2) + 1;
   const suffix = String(index).padStart(9, '0');
   return `${prefix}${suffix}`;
@@ -162,28 +169,82 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Starting synthetic data seeding...');
+    console.log('Starting synthetic data seeding with new schema...');
 
-    // Clear existing data
+    // Clear existing data in order (respecting foreign keys)
+    console.log('Clearing existing data...');
+    await supabaseAdmin.from('anomaly_flag_years').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('anomaly_flags_v2').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabaseAdmin.from('anomaly_flags').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('peer_group_stats').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('provider_attributes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabaseAdmin.from('provider_yearly_metrics').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabaseAdmin.from('providers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
+    
+    // Deprecate existing active releases
+    await supabaseAdmin
+      .from('dataset_releases')
+      .update({ status: 'deprecated' })
+      .eq('status', 'active');
+    
     console.log('Cleared existing data');
+
+    // Create new dataset release
+    const releaseLabel = `Synthetic Dataset ${new Date().toISOString().split('T')[0]}`;
+    const { data: datasetRelease, error: releaseError } = await supabaseAdmin
+      .from('dataset_releases')
+      .insert({
+        dataset_key: 'synthetic_v1',
+        release_label: releaseLabel,
+        status: 'active',
+        notes: 'Synthetic data for testing anomaly detection with varied peer group sizes',
+        source_url: null,
+        ingested_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (releaseError || !datasetRelease) {
+      console.error('Error creating dataset release:', releaseError);
+      throw new Error('Failed to create dataset release');
+    }
+
+    console.log('Created dataset release:', datasetRelease.id);
+
+    // Create a compute run record for seeding
+    const { data: computeRun, error: computeRunError } = await supabaseAdmin
+      .from('compute_runs')
+      .insert({
+        run_type: 'seed',
+        status: 'running',
+        dataset_release_id: datasetRelease.id,
+        rule_set_version: 'synthetic_v1.0',
+        created_by: user.id,
+        parameters_json: {
+          seed: 12345,
+          provider_count: 5000,
+          years: [2023, 2024]
+        },
+        started_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (computeRunError) {
+      console.error('Error creating compute run:', computeRunError);
+    }
 
     // Fixed seed for deterministic generation
     const SEED = 12345;
     const rand = mulberry32(SEED);
 
     const PROVIDER_COUNT = 5000;
-    const providers: any[] = [];
-    const metrics: any[] = [];
-
-    // Track which providers will be outliers (for consistent 2-year behavior)
+    const providers: { npi: string; provider_name: string; specialty: string; state: string; entity_type: string }[] = [];
+    
+    // Track which providers will be outliers
     const outlierIndices = new Set<number>();
     
-    // Pre-determine ~0.7% as persistent outliers across both years
-    // This should yield ~25-35 flagged after percentile calculation
+    // Pre-determine ~0.7% as persistent outliers
     for (let i = 0; i < PROVIDER_COUNT; i++) {
       if (rand() < 0.007) {
         outlierIndices.add(i);
@@ -192,7 +253,7 @@ Deno.serve(async (req) => {
 
     console.log(`Pre-determined ${outlierIndices.size} persistent outliers`);
 
-    // Generate providers
+    // Generate providers with varied specialty/state to create different peer group sizes
     for (let i = 0; i < PROVIDER_COUNT; i++) {
       const specialty = SPECIALTIES[Math.floor(rand() * SPECIALTIES.length)];
       const state = selectWeighted(rand, STATES, STATE_WEIGHTS);
@@ -203,7 +264,8 @@ Deno.serve(async (req) => {
         npi: generateNPI(rand, i + 1),
         provider_name: `${firstName} ${lastName}, MD`,
         specialty,
-        state
+        state,
+        entity_type: rand() < 0.95 ? 'individual' : 'organization'
       });
     }
 
@@ -211,7 +273,7 @@ Deno.serve(async (req) => {
 
     // Insert providers in batches
     const BATCH_SIZE = 500;
-    const insertedProviders: any[] = [];
+    const insertedProviders: { id: string }[] = [];
     
     for (let i = 0; i < providers.length; i += BATCH_SIZE) {
       const batch = providers.slice(i, i + BATCH_SIZE);
@@ -229,14 +291,35 @@ Deno.serve(async (req) => {
 
     console.log(`Inserted ${insertedProviders.length} providers`);
 
-    // Generate metrics for each provider
-    // Log-normal parameters: median ~$150k, heavy right tail
-    // ln(150000) ≈ 11.92, use stddev of ~1.2 for heavy tail
-    const LOG_MEAN = 11.92;
+    // Generate metrics and provider_attributes for each provider
+    const LOG_MEAN = 11.92; // ~$150k median
     const LOG_STD_DEV = 1.2;
+    
+    const metrics: {
+      provider_id: string;
+      year: number;
+      total_allowed_amount: number;
+      total_payment_amount: number;
+      dataset_release_id: string;
+      service_count: number;
+      beneficiary_count: number;
+    }[] = [];
+    
+    const providerAttributes: {
+      provider_id: string;
+      dataset_release_id: string;
+      year: number;
+      normalized_specialty: string;
+      normalized_state: string;
+      raw_specialty: string;
+      raw_state: string;
+      provider_display_name: string;
+      is_primary_record: boolean;
+    }[] = [];
 
     for (let i = 0; i < insertedProviders.length; i++) {
       const providerId = insertedProviders[i].id;
+      const providerData = providers[i];
       const isOutlier = outlierIndices.has(i);
 
       for (const year of [2023, 2024]) {
@@ -244,29 +327,49 @@ Deno.serve(async (req) => {
         
         if (isOutlier) {
           // Outliers: consistently high across both years
-          // Use higher log-mean for outliers (99th+ percentile range)
           amount = logNormalRandom(rand, LOG_MEAN + 2.5, 0.5);
-          // Add some year-to-year variation (±15%)
           const yearVariation = 0.85 + rand() * 0.3;
           amount *= yearVariation;
         } else {
-          // Normal distribution for non-outliers
           amount = logNormalRandom(rand, LOG_MEAN, LOG_STD_DEV);
         }
 
         // Ensure minimum of $10,000 and cap at $15M
         amount = Math.max(10000, Math.min(15000000, amount));
         
+        // Generate correlated service and beneficiary counts
+        const avgServiceAmount = 200 + rand() * 300; // $200-500 per service
+        const serviceCount = Math.round(amount / avgServiceAmount);
+        const servicesPerBeneficiary = 3 + rand() * 7; // 3-10 services per beneficiary
+        const beneficiaryCount = Math.round(serviceCount / servicesPerBeneficiary);
+        
         metrics.push({
           provider_id: providerId,
           year,
           total_allowed_amount: Math.round(amount * 100) / 100,
-          total_payment_amount: Math.round(amount * 100) / 100
+          total_payment_amount: Math.round(amount * 0.8 * 100) / 100, // 80% of allowed
+          dataset_release_id: datasetRelease.id,
+          service_count: serviceCount,
+          beneficiary_count: beneficiaryCount
+        });
+
+        // Add provider attributes (using the raw values which should match specialty_map)
+        providerAttributes.push({
+          provider_id: providerId,
+          dataset_release_id: datasetRelease.id,
+          year,
+          normalized_specialty: providerData.specialty, // These match our static list
+          normalized_state: providerData.state,
+          raw_specialty: providerData.specialty,
+          raw_state: providerData.state,
+          provider_display_name: providerData.provider_name,
+          is_primary_record: true
         });
       }
     }
 
     console.log(`Generated ${metrics.length} yearly metrics`);
+    console.log(`Generated ${providerAttributes.length} provider attributes`);
 
     // Insert metrics in batches
     for (let i = 0; i < metrics.length; i += BATCH_SIZE) {
@@ -283,24 +386,92 @@ Deno.serve(async (req) => {
 
     console.log('Inserted all metrics');
 
+    // Insert provider_attributes in batches
+    for (let i = 0; i < providerAttributes.length; i += BATCH_SIZE) {
+      const batch = providerAttributes.slice(i, i + BATCH_SIZE);
+      const { error } = await supabaseAdmin
+        .from('provider_attributes')
+        .insert(batch);
+      
+      if (error) {
+        console.error('Error inserting provider_attributes batch:', error);
+        throw error;
+      }
+    }
+
+    console.log('Inserted all provider attributes');
+
+    // Count peer group sizes for reporting
+    const peerGroupSizes = new Map<string, number>();
+    for (const p of providers) {
+      const key = `${p.specialty}|${p.state}`;
+      peerGroupSizes.set(key, (peerGroupSizes.get(key) || 0) + 1);
+    }
+    
+    let adequateGroups = 0;
+    let lowSampleGroups = 0;
+    let veryLowSampleGroups = 0;
+    
+    for (const size of peerGroupSizes.values()) {
+      if (size >= 20) adequateGroups++;
+      else if (size >= 10) lowSampleGroups++;
+      else veryLowSampleGroups++;
+    }
+
+    // Update compute run to success
+    if (computeRun) {
+      await supabaseAdmin
+        .from('compute_runs')
+        .update({
+          status: 'success',
+          finished_at: new Date().toISOString(),
+          parameters_json: {
+            seed: SEED,
+            provider_count: PROVIDER_COUNT,
+            years: [2023, 2024],
+            predetermined_outliers: outlierIndices.size,
+            peer_groups_adequate: adequateGroups,
+            peer_groups_low_sample: lowSampleGroups,
+            peer_groups_very_low_sample: veryLowSampleGroups
+          }
+        })
+        .eq('id', computeRun.id);
+    }
+
     // Log the seed action
     await supabaseAdmin.from('audit_log').insert({
       user_id: user.id,
       action: 'seed_synthetic_data',
-      entity_type: 'providers',
+      entity_type: 'dataset_releases',
+      entity_id: datasetRelease.id,
       metadata: {
         provider_count: PROVIDER_COUNT,
         seed: SEED,
-        predetermined_outliers: outlierIndices.size
+        predetermined_outliers: outlierIndices.size,
+        peer_groups_total: peerGroupSizes.size,
+        peer_groups_adequate: adequateGroups,
+        peer_groups_low_sample: lowSampleGroups,
+        peer_groups_very_low_sample: veryLowSampleGroups,
+        compute_run_id: computeRun?.id
       }
     });
 
     return new Response(
       JSON.stringify({
         success: true,
+        dataset_release_id: datasetRelease.id,
+        dataset_release_label: releaseLabel,
+        compute_run_id: computeRun?.id,
         providers_created: insertedProviders.length,
         metrics_created: metrics.length,
-        predetermined_outliers: outlierIndices.size
+        provider_attributes_created: providerAttributes.length,
+        predetermined_outliers: outlierIndices.size,
+        peer_groups: {
+          total: peerGroupSizes.size,
+          adequate: adequateGroups,
+          low_sample: lowSampleGroups,
+          very_low_sample: veryLowSampleGroups
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

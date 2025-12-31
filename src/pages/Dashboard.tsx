@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -5,51 +6,133 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart3, AlertTriangle, Users, TrendingUp, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { BarChart3, AlertTriangle, Users, TrendingUp, Loader2, Info } from 'lucide-react';
+import { DataLineagePanel } from '@/components/DataLineagePanel';
+import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 
-interface AnomalyFlag {
+interface AnomalyFlagV2 {
   id: string;
   provider_id: string;
-  specialty: string;
-  state: string;
-  percentile_2023: number;
-  percentile_2024: number;
-  peer_group_size: number;
+  normalized_specialty: string;
+  normalized_state: string;
+  flagged: boolean;
+  flag_reason: string | null;
+  metric_name: string;
+  rule_set_version: string;
   providers: {
     id: string;
     npi: string;
     provider_name: string;
   };
+  anomaly_flag_years: {
+    year: number;
+    percentile_rank: number;
+    peer_size: number;
+    value: number;
+    p995_threshold: number;
+  }[];
+}
+
+interface DatasetRelease {
+  id: string;
+  release_label: string;
+  dataset_key: string;
+  status: string;
+  ingested_at: string | null;
+  source_url: string | null;
+}
+
+interface ComputeRun {
+  id: string;
+  rule_set_version: string;
+  status: string;
+  finished_at: string | null;
+  parameters_json: Record<string, unknown>;
 }
 
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
   const navigate = useNavigate();
+  const [includeLowSample, setIncludeLowSample] = useState(false);
 
-  // Fetch flagged providers with their details
-  const { data: flaggedProviders, isLoading: flaggedLoading } = useQuery({
-    queryKey: ['flagged-providers'],
+  // Fetch active dataset release
+  const { data: datasetRelease, isLoading: releaseLoading } = useQuery({
+    queryKey: ['active-dataset-release'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('anomaly_flags')
+        .from('dataset_releases')
+        .select('*')
+        .eq('status', 'active')
+        .order('ingested_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data as DatasetRelease | null;
+    }
+  });
+
+  // Fetch latest compute run
+  const { data: computeRun } = useQuery({
+    queryKey: ['latest-compute-run', datasetRelease?.id],
+    queryFn: async () => {
+      if (!datasetRelease) return null;
+      const { data, error } = await supabase
+        .from('compute_runs')
+        .select('*')
+        .eq('dataset_release_id', datasetRelease.id)
+        .eq('run_type', 'anomaly_flags_v2')
+        .eq('status', 'success')
+        .order('finished_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data as ComputeRun | null;
+    },
+    enabled: !!datasetRelease
+  });
+
+  // Fetch flagged providers from v2 table with year data
+  const { data: flaggedProviders, isLoading: flaggedLoading } = useQuery({
+    queryKey: ['flagged-providers-v2', includeLowSample],
+    queryFn: async () => {
+      let query = supabase
+        .from('anomaly_flags_v2')
         .select(`
           id,
           provider_id,
-          specialty,
-          state,
-          percentile_2023,
-          percentile_2024,
-          peer_group_size,
+          normalized_specialty,
+          normalized_state,
+          flagged,
+          flag_reason,
+          metric_name,
+          rule_set_version,
           providers (
             id,
             npi,
             provider_name
+          ),
+          anomaly_flag_years (
+            year,
+            percentile_rank,
+            peer_size,
+            value,
+            p995_threshold
           )
-        `)
-        .order('percentile_2024', { ascending: false });
+        `);
+
+      // If not including low sample, only show flagged=true
+      if (!includeLowSample) {
+        query = query.eq('flagged', true);
+      }
+      
+      const { data, error } = await query.order('flagged', { ascending: false });
       
       if (error) throw error;
-      return data as AnomalyFlag[];
+      return data as AnomalyFlagV2[];
     }
   });
 
@@ -76,7 +159,6 @@ export default function Dashboard() {
       
       if (error) throw error;
       
-      // Count unique specialty+state combinations
       const uniqueGroups = new Set(data?.map(p => `${p.specialty}|${p.state}`));
       return uniqueGroups.size;
     }
@@ -90,14 +172,37 @@ export default function Dashboard() {
     navigate(`/provider/${providerId}`);
   };
 
+  const getMinPeerSize = (flag: AnomalyFlagV2) => {
+    if (!flag.anomaly_flag_years || flag.anomaly_flag_years.length === 0) return null;
+    return Math.min(...flag.anomaly_flag_years.map(y => y.peer_size));
+  };
+
+  const getPercentileForYear = (flag: AnomalyFlagV2, year: number) => {
+    const yearData = flag.anomaly_flag_years?.find(y => y.year === year);
+    return yearData?.percentile_rank;
+  };
+
+  const flaggedCount = flaggedProviders?.filter(f => f.flagged).length || 0;
+  const suppressedCount = flaggedProviders?.filter(f => !f.flagged).length || 0;
+
   return (
     <div className="space-y-6">
+      {/* Disclaimer Banner */}
+      <DisclaimerBanner variant="detailed" />
+
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
           Statistical anomaly analysis of healthcare spending data
         </p>
       </div>
+
+      {/* Data Lineage Panel */}
+      <DataLineagePanel 
+        datasetRelease={datasetRelease || null} 
+        computeRun={computeRun || null}
+        isLoading={releaseLoading}
+      />
 
       {/* User info card */}
       <Card>
@@ -137,7 +242,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {flaggedLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (flaggedProviders?.length || 0)}
+              {flaggedLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : flaggedCount}
             </div>
             <p className="text-xs text-muted-foreground">
               ≥99.5th percentile rank (2 years)
@@ -188,11 +293,32 @@ export default function Dashboard() {
       {/* Flagged providers table */}
       <Card>
         <CardHeader>
-          <CardTitle>Flagged Providers</CardTitle>
-          <CardDescription>
-            Providers with total allowed amount at or above the 99.5th percentile rank of their peer group for both 2023 and 2024.
-            Click a row to view details.
-          </CardDescription>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Statistical Outliers</CardTitle>
+              <CardDescription>
+                Providers with total allowed amount at or above the 99.5th percentile rank of their peer group for both 2023 and 2024.
+                Click a row to view details.
+              </CardDescription>
+            </div>
+            {isAdmin && (
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="include-low-sample"
+                  checked={includeLowSample}
+                  onCheckedChange={setIncludeLowSample}
+                />
+                <Label htmlFor="include-low-sample" className="text-sm">
+                  Include low-sample groups
+                </Label>
+                {includeLowSample && suppressedCount > 0 && (
+                  <Badge variant="outline" className="ml-2">
+                    +{suppressedCount} suppressed
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {flaggedLoading ? (
@@ -211,45 +337,69 @@ export default function Dashboard() {
                   <TableHead>NPI</TableHead>
                   <TableHead>Specialty</TableHead>
                   <TableHead>State</TableHead>
-                  <TableHead className="text-right">2023 Percentile Rank</TableHead>
-                  <TableHead className="text-right">2024 Percentile Rank</TableHead>
-                  <TableHead className="text-right">Peer Group Size</TableHead>
+                  <TableHead className="text-right">2023 Percentile</TableHead>
+                  <TableHead className="text-right">2024 Percentile</TableHead>
+                  <TableHead className="text-right">Min Peer Size</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {flaggedProviders.map((flag) => (
-                  <TableRow
-                    key={flag.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleRowClick(flag.provider_id)}
-                  >
-                    <TableCell className="font-medium">
-                      {flag.providers?.provider_name || 'Unknown'}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {flag.providers?.npi || '-'}
-                    </TableCell>
-                    <TableCell>{flag.specialty}</TableCell>
-                    <TableCell>{flag.state}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="destructive" className="font-mono">
-                        {formatPercentile(flag.percentile_2023)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="destructive" className="font-mono">
-                        {formatPercentile(flag.percentile_2024)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {flag.peer_group_size < 20 ? (
-                        <span className="text-warning">{flag.peer_group_size}</span>
-                      ) : (
-                        flag.peer_group_size
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {flaggedProviders.map((flag) => {
+                  const minPeerSize = getMinPeerSize(flag);
+                  const percentile2023 = getPercentileForYear(flag, 2023);
+                  const percentile2024 = getPercentileForYear(flag, 2024);
+                  const isLowSample = minPeerSize !== null && minPeerSize < 20;
+
+                  return (
+                    <TableRow
+                      key={flag.id}
+                      className={`cursor-pointer hover:bg-muted/50 ${!flag.flagged ? 'opacity-60' : ''}`}
+                      onClick={() => handleRowClick(flag.provider_id)}
+                    >
+                      <TableCell className="font-medium">
+                        {flag.providers?.provider_name || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {flag.providers?.npi || '-'}
+                      </TableCell>
+                      <TableCell>{flag.normalized_specialty}</TableCell>
+                      <TableCell>{flag.normalized_state}</TableCell>
+                      <TableCell className="text-right">
+                        {percentile2023 !== undefined ? (
+                          <Badge variant={flag.flagged ? 'destructive' : 'secondary'} className="font-mono">
+                            {formatPercentile(percentile2023)}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {percentile2024 !== undefined ? (
+                          <Badge variant={flag.flagged ? 'destructive' : 'secondary'} className="font-mono">
+                            {formatPercentile(percentile2024)}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {isLowSample && (
+                            <Info className="h-3 w-3 text-amber-500" />
+                          )}
+                          <span className={isLowSample ? 'text-amber-500' : ''}>
+                            {minPeerSize || '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {flag.flagged ? (
+                          <Badge variant="destructive">Flagged</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-600">
+                            Suppressed
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
