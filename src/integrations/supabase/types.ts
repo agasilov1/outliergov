@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      anomaly_flag_years: {
+        Row: {
+          anomaly_flag_id: string
+          created_at: string | null
+          id: string
+          p995_threshold: number
+          peer_size: number
+          percentile_rank: number
+          value: number
+          year: number
+        }
+        Insert: {
+          anomaly_flag_id: string
+          created_at?: string | null
+          id?: string
+          p995_threshold: number
+          peer_size: number
+          percentile_rank: number
+          value: number
+          year: number
+        }
+        Update: {
+          anomaly_flag_id?: string
+          created_at?: string | null
+          id?: string
+          p995_threshold?: number
+          peer_size?: number
+          percentile_rank?: number
+          value?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anomaly_flag_years_anomaly_flag_id_fkey"
+            columns: ["anomaly_flag_id"]
+            isOneToOne: false
+            referencedRelation: "anomaly_flags_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       anomaly_flags: {
         Row: {
           computed_at: string | null
@@ -64,6 +105,85 @@ export type Database = {
           },
         ]
       }
+      anomaly_flags_v2: {
+        Row: {
+          compute_run_id: string | null
+          computed_at: string | null
+          consecutive_years_required: number
+          dataset_release_id: string
+          flag_reason: string | null
+          flagged: boolean
+          id: string
+          metric_name: string
+          min_peer_size_required: number
+          normalized_specialty: string
+          normalized_state: string
+          peer_group_key: string
+          peer_group_version: string
+          provider_id: string
+          rule_set_version: string
+          threshold_percentile_required: number
+        }
+        Insert: {
+          compute_run_id?: string | null
+          computed_at?: string | null
+          consecutive_years_required?: number
+          dataset_release_id: string
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          metric_name: string
+          min_peer_size_required?: number
+          normalized_specialty: string
+          normalized_state: string
+          peer_group_key: string
+          peer_group_version: string
+          provider_id: string
+          rule_set_version: string
+          threshold_percentile_required?: number
+        }
+        Update: {
+          compute_run_id?: string | null
+          computed_at?: string | null
+          consecutive_years_required?: number
+          dataset_release_id?: string
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          metric_name?: string
+          min_peer_size_required?: number
+          normalized_specialty?: string
+          normalized_state?: string
+          peer_group_key?: string
+          peer_group_version?: string
+          provider_id?: string
+          rule_set_version?: string
+          threshold_percentile_required?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anomaly_flags_v2_compute_run_id_fkey"
+            columns: ["compute_run_id"]
+            isOneToOne: false
+            referencedRelation: "compute_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "anomaly_flags_v2_dataset_release_id_fkey"
+            columns: ["dataset_release_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "anomaly_flags_v2_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -91,6 +211,95 @@ export type Database = {
           id?: string
           metadata?: Json | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      compute_runs: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          dataset_release_id: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          parameters_json: Json
+          rule_set_version: string
+          run_type: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          dataset_release_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          parameters_json?: Json
+          rule_set_version: string
+          run_type: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          dataset_release_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          parameters_json?: Json
+          rule_set_version?: string
+          run_type?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compute_runs_dataset_release_id_fkey"
+            columns: ["dataset_release_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dataset_releases: {
+        Row: {
+          created_at: string | null
+          dataset_key: string
+          file_hash: string | null
+          id: string
+          ingested_at: string | null
+          notes: string | null
+          release_label: string
+          source_published_at: string | null
+          source_url: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          dataset_key: string
+          file_hash?: string | null
+          id?: string
+          ingested_at?: string | null
+          notes?: string | null
+          release_label: string
+          source_published_at?: string | null
+          source_url?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          dataset_key?: string
+          file_hash?: string | null
+          id?: string
+          ingested_at?: string | null
+          notes?: string | null
+          release_label?: string
+          source_published_at?: string | null
+          source_url?: string | null
+          status?: string
         }
         Relationships: []
       }
@@ -162,6 +371,92 @@ export type Database = {
           },
         ]
       }
+      peer_group_definitions: {
+        Row: {
+          created_at: string | null
+          definition_json: Json
+          id: string
+          key: string
+          version: string
+        }
+        Insert: {
+          created_at?: string | null
+          definition_json: Json
+          id?: string
+          key: string
+          version: string
+        }
+        Update: {
+          created_at?: string | null
+          definition_json?: Json
+          id?: string
+          key?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      peer_group_stats: {
+        Row: {
+          created_at: string | null
+          dataset_release_id: string
+          id: string
+          mean: number | null
+          metric_name: string
+          normalized_specialty: string
+          normalized_state: string
+          p50: number | null
+          p95: number | null
+          p99: number | null
+          p995: number | null
+          peer_group_key: string
+          peer_group_version: string
+          peer_size: number
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          dataset_release_id: string
+          id?: string
+          mean?: number | null
+          metric_name: string
+          normalized_specialty: string
+          normalized_state: string
+          p50?: number | null
+          p95?: number | null
+          p99?: number | null
+          p995?: number | null
+          peer_group_key: string
+          peer_group_version: string
+          peer_size: number
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          dataset_release_id?: string
+          id?: string
+          mean?: number | null
+          metric_name?: string
+          normalized_specialty?: string
+          normalized_state?: string
+          p50?: number | null
+          p95?: number | null
+          p99?: number | null
+          p995?: number | null
+          peer_group_key?: string
+          peer_group_version?: string
+          peer_size?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peer_group_stats_dataset_release_id_fkey"
+            columns: ["dataset_release_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -197,32 +492,111 @@ export type Database = {
           },
         ]
       }
-      provider_yearly_metrics: {
+      provider_attributes: {
         Row: {
           created_at: string | null
+          dataset_release_id: string
+          id: string
+          is_primary_record: boolean | null
+          normalized_specialty: string
+          normalized_state: string
+          provider_display_name: string | null
+          provider_id: string
+          raw_specialty: string | null
+          raw_state: string | null
+          taxonomy_code: string | null
+          unmapped_specialty: boolean | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          dataset_release_id: string
+          id?: string
+          is_primary_record?: boolean | null
+          normalized_specialty: string
+          normalized_state: string
+          provider_display_name?: string | null
+          provider_id: string
+          raw_specialty?: string | null
+          raw_state?: string | null
+          taxonomy_code?: string | null
+          unmapped_specialty?: boolean | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          dataset_release_id?: string
+          id?: string
+          is_primary_record?: boolean | null
+          normalized_specialty?: string
+          normalized_state?: string
+          provider_display_name?: string | null
+          provider_id?: string
+          raw_specialty?: string | null
+          raw_state?: string | null
+          taxonomy_code?: string | null
+          unmapped_specialty?: boolean | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_attributes_dataset_release_id_fkey"
+            columns: ["dataset_release_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_attributes_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_yearly_metrics: {
+        Row: {
+          beneficiary_count: number | null
+          created_at: string | null
+          dataset_release_id: string | null
           id: string
           provider_id: string
+          service_count: number | null
           total_allowed_amount: number
           total_payment_amount: number
           year: number
         }
         Insert: {
+          beneficiary_count?: number | null
           created_at?: string | null
+          dataset_release_id?: string | null
           id?: string
           provider_id: string
+          service_count?: number | null
           total_allowed_amount: number
           total_payment_amount: number
           year: number
         }
         Update: {
+          beneficiary_count?: number | null
           created_at?: string | null
+          dataset_release_id?: string | null
           id?: string
           provider_id?: string
+          service_count?: number | null
           total_allowed_amount?: number
           total_payment_amount?: number
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "provider_yearly_metrics_dataset_release_id_fkey"
+            columns: ["dataset_release_id"]
+            isOneToOne: false
+            referencedRelation: "dataset_releases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "provider_yearly_metrics_provider_id_fkey"
             columns: ["provider_id"]
@@ -235,6 +609,7 @@ export type Database = {
       providers: {
         Row: {
           created_at: string | null
+          entity_type: string | null
           id: string
           npi: string
           provider_name: string
@@ -243,6 +618,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          entity_type?: string | null
           id?: string
           npi: string
           provider_name: string
@@ -251,11 +627,39 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          entity_type?: string | null
           id?: string
           npi?: string
           provider_name?: string
           specialty?: string
           state?: string
+        }
+        Relationships: []
+      }
+      specialty_map: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          normalized_specialty: string
+          notes: string | null
+          raw_value: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          normalized_specialty: string
+          notes?: string | null
+          raw_value: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          normalized_specialty?: string
+          notes?: string | null
+          raw_value?: string
         }
         Relationships: []
       }
@@ -293,6 +697,41 @@ export type Database = {
           providers_flagged: number
         }[]
       }
+      compute_anomaly_flags_v2: {
+        Args: {
+          p_consecutive_years_required?: number
+          p_created_by?: string
+          p_dataset_release_id: string
+          p_metric_name?: string
+          p_min_peer_size_required?: number
+          p_peer_group_key?: string
+          p_peer_group_version?: string
+          p_rule_set_version?: string
+          p_threshold_percentile?: number
+          p_years_window?: number[]
+        }
+        Returns: {
+          compute_run_id: string
+          peer_groups_analyzed: number
+          providers_analyzed: number
+          providers_flagged: number
+          providers_suppressed_low_sample: number
+        }[]
+      }
+      compute_peer_group_stats: {
+        Args: {
+          p_dataset_release_id: string
+          p_metric_name?: string
+          p_peer_group_key?: string
+          p_peer_group_version?: string
+          p_years: number[]
+        }
+        Returns: {
+          groups_computed: number
+          years_processed: number
+        }[]
+      }
+      get_active_dataset_release: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -300,6 +739,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_specialty_unmapped: {
+        Args: { raw_specialty: string }
+        Returns: boolean
+      }
+      normalize_specialty: { Args: { raw_specialty: string }; Returns: string }
+      normalize_state: { Args: { raw_state: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "firm_user"
