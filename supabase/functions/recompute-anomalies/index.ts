@@ -131,13 +131,13 @@ Deno.serve(async (req) => {
     }
 
     // Set defaults for other parameters
-    const thresholdPercentile = body.thresholdPercentile ?? 99.5;
+    const thresholdPercentile = body.thresholdPercentile ?? 99.0;
     const consecutiveYearsRequired = body.consecutiveYearsRequired ?? 2;
     const minPeerSizeRequired = body.minPeerSizeRequired ?? 20;
     const peerGroupKey = body.peerGroupKey ?? 'specialty_state';
     const peerGroupVersion = body.peerGroupVersion ?? 'v1';
     const metricName = body.metricName ?? 'total_allowed_amount';
-    const ruleSetVersion = body.ruleSetVersion ?? 'outlier_v1.0';
+    const ruleSetVersion = body.ruleSetVersion ?? 'outlier_v1.1';
 
     console.log('Starting anomaly computation with params:', {
       datasetReleaseId,
