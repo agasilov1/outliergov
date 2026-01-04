@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.compute-peer-stats]
 verify_jwt = false
+
+[functions.ingest-provider-metrics]
+verify_jwt = false
