@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 
 interface Invitation {
   id: string;
@@ -60,7 +60,6 @@ export default function Admin() {
   const [activeSection, setActiveSection] = useState<'invite' | 'users' | 'firms' | 'data' | 'audit'>('invite');
   
   // Data management state
-  const [seedLoading, setSeedLoading] = useState(false);
   const [recomputeLoading, setRecomputeLoading] = useState(false);
   const [lastComputeStats, setLastComputeStats] = useState<{
     providers: number;
@@ -154,23 +153,6 @@ export default function Admin() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleSeedData() {
-    if (!confirm('This will clear existing data and seed 5,000 synthetic providers. Continue?')) return;
-    setSeedLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('seed-synthetic-data');
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success(`Seeded ${data.providers_created} providers. Dataset: ${data.dataset_release_label}`);
-      loadData();
-    } catch (error) {
-      console.error('Error seeding:', error);
-      toast.error('Failed to seed data');
-    } finally {
-      setSeedLoading(false);
-    }
-  }
-
   async function handleRecomputeAnomalies() {
     setRecomputeLoading(true);
     try {
@@ -184,7 +166,7 @@ export default function Admin() {
         suppressed: data.results?.providers_suppressed_low_sample || 0,
         computeRunId: data.compute_run_id
       });
-      toast.success(`Flagged ${data.results?.providers_flagged || 0} providers`);
+      toast.success(`Flagged ${data.results?.providers_flagged || 0} providers (high confidence)`);
       loadData();
     } catch (error) {
       console.error('Error:', error);
@@ -197,6 +179,14 @@ export default function Admin() {
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const isExpired = (expiresAt: string) => new Date(expiresAt) < new Date();
   const pendingInvitations = invitations.filter(i => !i.accepted_at && !isExpired(i.expires_at));
+  
+  const isSyntheticDataset = (release: DatasetRelease) => {
+    return release.dataset_key?.toLowerCase().includes('synthetic') || 
+           release.release_label?.toLowerCase().includes('synthetic') ||
+           release.release_label?.toLowerCase().includes('demo');
+  };
+
+  const activeDataset = datasetReleases.find(r => r.status === 'active');
 
   return (
     <div className="space-y-6">
@@ -252,28 +242,150 @@ export default function Admin() {
 
       {activeSection === 'data' && (
         <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle>Seed Synthetic Data</CardTitle><CardDescription>Generate 5,000 synthetic providers with varied peer group sizes</CardDescription></CardHeader>
-              <CardContent className="space-y-4">
-                <Button onClick={handleSeedData} disabled={seedLoading} className="w-full">{seedLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Seed Synthetic Data</Button>
+          {/* Active Dataset Info */}
+          {activeDataset && (
+            <Card className={isSyntheticDataset(activeDataset) ? "border-amber-500/50" : "border-green-500/50"}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5" />
+                  Active Dataset
+                  {isSyntheticDataset(activeDataset) ? (
+                    <Badge variant="outline" className="text-amber-600 border-amber-600">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Demo / Synthetic
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-green-600 border-green-600">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Production
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>Current dataset being used for analysis</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Dataset</p>
+                    <p className="font-medium">{activeDataset.release_label}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ingested</p>
+                    <p className="font-medium">{activeDataset.ingested_at ? formatDate(activeDataset.ingested_at) : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Source</p>
+                    <p className="font-medium">{isSyntheticDataset(activeDataset) ? 'Synthetic Data Generator' : 'CMS Public Use Files'}</p>
+                  </div>
+                </div>
+                {isSyntheticDataset(activeDataset) && (
+                  <div className="mt-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                      <p className="text-sm text-amber-700">
+                        <strong>Warning:</strong> The platform is currently using synthetic demo data. 
+                        Ingest real CMS data for production use.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader><CardTitle>Recompute Anomalies</CardTitle><CardDescription>Run anomaly detection on current data</CardDescription></CardHeader>
-              <CardContent className="space-y-4">
-                <Button onClick={handleRecomputeAnomalies} disabled={recomputeLoading} className="w-full">{recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}<RefreshCw className="mr-2 h-4 w-4" />Recompute Anomalies</Button>
-                {lastComputeStats && <div className="rounded-lg border bg-muted/50 p-3 text-sm"><p><strong>Last Run:</strong></p><p>Providers: {lastComputeStats.providers.toLocaleString()}</p><p>Peer groups: {lastComputeStats.peerGroups}</p><p>Flagged: {lastComputeStats.flagged}</p><p>Suppressed (low sample): {lastComputeStats.suppressed}</p></div>}
-              </CardContent>
-            </Card>
-          </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recompute Anomalies</CardTitle>
+              <CardDescription>Run anomaly detection on current data using the 99.0th percentile threshold</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button onClick={handleRecomputeAnomalies} disabled={recomputeLoading} className="w-full">
+                {recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Recompute Anomalies
+              </Button>
+              {lastComputeStats && (
+                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                  <p><strong>Last Run:</strong></p>
+                  <p>Providers analyzed: {lastComputeStats.providers.toLocaleString()}</p>
+                  <p>Peer groups: {lastComputeStats.peerGroups}</p>
+                  <p>High confidence flags: {lastComputeStats.flagged}</p>
+                  <p>Low confidence (suppressed): {lastComputeStats.suppressed}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle>Dataset Releases</CardTitle></CardHeader>
-            <CardContent><Table><TableHeader><TableRow><TableHead>Label</TableHead><TableHead>Status</TableHead><TableHead>Ingested</TableHead></TableRow></TableHeader><TableBody>{datasetReleases.map(r => <TableRow key={r.id}><TableCell className="font-medium">{r.release_label}</TableCell><TableCell><Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge></TableCell><TableCell className="text-sm text-muted-foreground">{r.ingested_at ? formatDate(r.ingested_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Label</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ingested</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {datasetReleases.map(r => (
+                    <TableRow key={r.id} className={r.status === 'active' ? 'bg-muted/30' : ''}>
+                      <TableCell className="font-medium">{r.release_label}</TableCell>
+                      <TableCell>
+                        {isSyntheticDataset(r) ? (
+                          <Badge variant="outline" className="text-amber-600 border-amber-600">Demo</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-green-600 border-green-600">CMS</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.ingested_at ? formatDate(r.ingested_at) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
           </Card>
+
           <Card>
             <CardHeader><CardTitle>Compute History</CardTitle></CardHeader>
-            <CardContent><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Version</TableHead><TableHead>Started</TableHead></TableRow></TableHeader><TableBody>{computeRuns.map(r => <TableRow key={r.id}><TableCell>{r.run_type}</TableCell><TableCell>{r.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : r.status === 'failed' ? <XCircle className="h-4 w-4 text-destructive" /> : <Loader2 className="h-4 w-4 animate-spin" />}</TableCell><TableCell className="font-mono text-xs">{r.rule_set_version}</TableCell><TableCell className="text-sm text-muted-foreground">{r.started_at ? formatDate(r.started_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Started</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {computeRuns.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.run_type}</TableCell>
+                      <TableCell>
+                        {r.status === 'success' ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        ) : r.status === 'failed' ? (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{r.rule_set_version}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.started_at ? formatDate(r.started_at) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
           </Card>
         </div>
       )}

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle, Search } from 'lucide-react';
 import { PeerDistributionChart } from '@/components/PeerDistributionChart';
 import { YearlyComparisonChart } from '@/components/YearlyComparisonChart';
 import { ProviderBrief } from '@/components/ProviderBrief';
@@ -310,6 +310,19 @@ export default function ProviderDetail() {
   };
 
   const hasLowSampleYear = flagYears?.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
+  
+  // Determine classification
+  const isHighConfidence = anomalyFlagV2?.flagged === true;
+  const isLowConfidence = anomalyFlagV2 && !anomalyFlagV2.flagged;
+
+  const getProviderDisplayName = () => {
+    if (!provider) return 'Unknown';
+    // If provider_name equals NPI, show formatted NPI instead
+    if (provider.provider_name === provider.npi) {
+      return `Provider NPI ${provider.npi}`;
+    }
+    return provider.provider_name || `Provider NPI ${provider.npi}`;
+  };
 
   if (providerLoading) {
     return (
@@ -354,21 +367,21 @@ export default function ProviderDetail() {
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
-              <CardTitle className="text-2xl">{provider.provider_name}</CardTitle>
+              <CardTitle className="text-2xl">{getProviderDisplayName()}</CardTitle>
               <CardDescription className="mt-1">
                 NPI: {provider.npi} • {provider.specialty} • {provider.state}
               </CardDescription>
             </div>
             {anomalyFlagV2 && (
-              anomalyFlagV2.flagged ? (
+              isHighConfidence ? (
                 <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
                   <AlertTriangle className="h-4 w-4" />
-                  Flagged
+                  Flagged (High Confidence)
                 </Badge>
               ) : (
                 <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 text-amber-600 border-amber-600">
-                  <Info className="h-4 w-4" />
-                  Suppressed
+                  <Search className="h-4 w-4" />
+                  Possible Outlier (Low Confidence)
                 </Badge>
               )
             )}
@@ -392,13 +405,47 @@ export default function ProviderDetail() {
             </div>
             {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
               <div className="mt-3 text-sm text-muted-foreground">
-                <span className="font-medium">Reason: </span>
+                <span className="font-medium">Classification Reason: </span>
                 {anomalyFlagV2.flag_reason}
               </div>
             )}
           </CardContent>
         )}
       </Card>
+
+      {/* Classification Explanation Card */}
+      {anomalyFlagV2 && (
+        <Card className={isHighConfidence ? "border-destructive/30 bg-destructive/5" : "border-amber-500/30 bg-amber-500/5"}>
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              {isHighConfidence ? (
+                <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              ) : (
+                <Search className="h-5 w-5 text-amber-600 mt-0.5" />
+              )}
+              <div>
+                <h3 className={`font-semibold ${isHighConfidence ? 'text-destructive' : 'text-amber-700'}`}>
+                  {isHighConfidence ? 'High Confidence Classification' : 'Low Confidence Classification'}
+                </h3>
+                <p className="text-sm mt-1">
+                  {isHighConfidence ? (
+                    <>
+                      This provider's total allowed amount ranked at or above the {anomalyFlagV2.threshold_percentile_required}th percentile 
+                      within their peer group for {anomalyFlagV2.consecutive_years_required} consecutive years, with a peer group size of at least {anomalyFlagV2.min_peer_size_required} providers. 
+                      This meets the criteria for high-confidence statistical outlier classification.
+                    </>
+                  ) : (
+                    <>
+                      This provider meets statistical outlier criteria but is classified as low confidence due to limited peer group size (&lt;{anomalyFlagV2.min_peer_size_required} providers). 
+                      This result should be treated as an investigative lead requiring additional verification—not a conclusion.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Data Lineage */}
       <DataLineagePanel 
@@ -413,7 +460,7 @@ export default function ProviderDetail() {
             <Info className="h-5 w-5 text-amber-500" />
             <p className="text-sm">
               This peer group contains fewer than <strong>{anomalyFlagV2?.min_peer_size_required || 20}</strong> providers in one or more years. 
-              Statistical significance of percentile rankings may be limited.
+              Statistical significance of percentile rankings may be limited. Additional review is required.
             </p>
           </CardContent>
         </Card>
@@ -428,7 +475,7 @@ export default function ProviderDetail() {
               Per-Year Statistical Breakdown
             </CardTitle>
             <CardDescription>
-              Detailed metrics for each analysis year
+              Detailed metrics for each analysis year (statistical variance only)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -439,13 +486,13 @@ export default function ProviderDetail() {
                   <TableHead className="text-right">Provider Value</TableHead>
                   <TableHead className="text-right">Percentile Rank</TableHead>
                   <TableHead className="text-right">Peer Size</TableHead>
-                  <TableHead className="text-right">99.5th Threshold</TableHead>
+                  <TableHead className="text-right">99.0th Threshold</TableHead>
                   <TableHead className="text-center">Met Threshold</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {flagYears.map(fy => {
-                  const meetsThreshold = Number(fy.percentile_rank) >= (anomalyFlagV2?.threshold_percentile_required || 99.5);
+                  const meetsThreshold = Number(fy.percentile_rank) >= (anomalyFlagV2?.threshold_percentile_required || 99.0);
                   const isLowSample = fy.peer_size < (anomalyFlagV2?.min_peer_size_required || 20);
                   
                   return (
@@ -594,7 +641,7 @@ export default function ProviderDetail() {
                 ))}
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">99.5th Percentile (Threshold)</TableCell>
+                <TableCell className="font-medium">99.5th Percentile</TableCell>
                 {peerStats.map(s => (
                   <TableCell key={s.year} className="text-right">{formatCurrency(s.p995)}</TableCell>
                 ))}

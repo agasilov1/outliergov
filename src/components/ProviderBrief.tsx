@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Printer, X, AlertTriangle, Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -122,7 +123,8 @@ export function ProviderBrief({
           provider_name: provider.provider_name,
           npi: provider.npi,
           dataset_release_id: datasetRelease?.id,
-          compute_run_id: computeRun?.id
+          compute_run_id: computeRun?.id,
+          classification: anomalyFlagV2?.flagged ? 'high_confidence' : 'low_confidence'
         }
       });
     }
@@ -132,6 +134,16 @@ export function ProviderBrief({
 
   const hasLowSampleYear = flagYears.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
   const uniqueYears = [...new Set(flagYears.map(fy => fy.year))].sort();
+  const isHighConfidence = anomalyFlagV2?.flagged === true;
+  const minPeerSize = flagYears.length > 0 ? Math.min(...flagYears.map(fy => fy.peer_size)) : null;
+
+  const getProviderDisplayName = () => {
+    // If provider_name equals NPI, show formatted NPI instead
+    if (provider.provider_name === provider.npi) {
+      return `Provider NPI ${provider.npi}`;
+    }
+    return provider.provider_name || `Provider NPI ${provider.npi}`;
+  };
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -166,6 +178,42 @@ export function ProviderBrief({
             </p>
           </div>
 
+          {/* Classification Banner */}
+          {anomalyFlagV2 && (
+            <section className={`rounded-lg border p-4 ${isHighConfidence ? 'border-red-500/50 bg-red-500/10' : 'border-amber-500/50 bg-amber-500/10'}`}>
+              <div className="flex items-start gap-3">
+                {isHighConfidence ? (
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                ) : (
+                  <Search className="h-5 w-5 text-amber-600 mt-0.5" />
+                )}
+                <div>
+                  <h3 className={`font-semibold ${isHighConfidence ? 'text-red-700' : 'text-amber-700'}`}>
+                    Classification: {isHighConfidence ? 'Flagged (High Confidence)' : 'Possible Outlier (Low Confidence)'}
+                  </h3>
+                  <p className="text-sm mt-1">
+                    {isHighConfidence ? (
+                      <>
+                        This provider met all statistical criteria with adequate peer group size (≥{anomalyFlagV2.min_peer_size_required} providers). 
+                        This is a high-confidence statistical outlier suitable for further review.
+                      </>
+                    ) : (
+                      <>
+                        This provider met statistical criteria but has limited peer group size (&lt;{anomalyFlagV2.min_peer_size_required} providers). 
+                        This is an investigative lead only—additional verification is required before drawing conclusions.
+                      </>
+                    )}
+                  </p>
+                  {minPeerSize !== null && (
+                    <p className="text-sm mt-2">
+                      <strong>Minimum Peer Group Size:</strong> {minPeerSize} providers
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Provider Identification */}
           <section>
             <h2 className="mb-3 text-lg font-semibold">Provider Identification</h2>
@@ -173,7 +221,7 @@ export function ProviderBrief({
               <tbody>
                 <tr className="border-b">
                   <td className="py-2 font-medium text-muted-foreground">Provider Name</td>
-                  <td className="py-2">{provider.provider_name}</td>
+                  <td className="py-2">{getProviderDisplayName()}</td>
                 </tr>
                 <tr className="border-b">
                   <td className="py-2 font-medium text-muted-foreground">NPI</td>
@@ -237,7 +285,7 @@ export function ProviderBrief({
                 within their peer group ({anomalyFlagV2.peer_group_key}) for {anomalyFlagV2.consecutive_years_required} consecutive years.
                 {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
                   <span className="block mt-2 text-amber-600">
-                    <strong>Note:</strong> {anomalyFlagV2.flag_reason}
+                    <strong>Classification Note:</strong> {anomalyFlagV2.flag_reason}
                   </span>
                 )}
               </p>
@@ -297,7 +345,7 @@ export function ProviderBrief({
                   })}
                 </tr>
                 <tr className="border-b">
-                  <td className="py-2 font-medium">99.5th Percentile Threshold</td>
+                  <td className="py-2 font-medium">99.0th Percentile Threshold</td>
                   {uniqueYears.map(year => {
                     const flagYear = flagYears.find(fy => fy.year === year);
                     return (
@@ -320,7 +368,8 @@ export function ProviderBrief({
                   <h3 className="font-semibold text-amber-700">Low Sample Size Notice</h3>
                   <p className="text-sm text-amber-700">
                     This peer group contains fewer than {anomalyFlagV2?.min_peer_size_required || 20} providers 
-                    in one or more analysis years. Statistical significance of percentile rankings may be limited.
+                    in one or more analysis years. Statistical significance of percentile rankings is limited.
+                    This result should be treated as an investigative lead requiring additional verification.
                   </p>
                 </div>
               </div>
@@ -333,9 +382,13 @@ export function ProviderBrief({
             <p className="text-sm">
               Peer groups are defined by {anomalyFlagV2?.peer_group_key || 'specialty and state'}. 
               Percentile rank is calculated using the PERCENT_RANK function on {anomalyFlagV2?.metric_name || 'total allowed amounts'} 
-              within each peer group for each calendar year. A provider is flagged only if their percentile rank is 
-              at or above {anomalyFlagV2?.threshold_percentile_required || 99.5} for {anomalyFlagV2?.consecutive_years_required || 2} consecutive years, 
-              and only if the peer group contains at least {anomalyFlagV2?.min_peer_size_required || 20} providers.
+              within each peer group for each calendar year. A provider is classified as a <strong>high-confidence</strong> statistical outlier 
+              if their percentile rank is at or above {anomalyFlagV2?.threshold_percentile_required || 99.0} for {anomalyFlagV2?.consecutive_years_required || 2} consecutive years, 
+              and the peer group contains at least {anomalyFlagV2?.min_peer_size_required || 20} providers.
+            </p>
+            <p className="text-sm mt-2">
+              Providers meeting percentile criteria but with peer groups below the minimum size threshold are classified as 
+              <strong> low-confidence / possible outliers</strong>. These require additional review before any conclusions can be drawn.
             </p>
             {anomalyFlagV2 && (
               <p className="mt-2 text-sm">
@@ -361,6 +414,12 @@ export function ProviderBrief({
               Any conclusions regarding provider conduct must be based on detailed chart review, 
               expert consultation, and independent verification of the underlying data.
             </p>
+            {!isHighConfidence && (
+              <p className="mt-2 text-sm font-semibold text-amber-700">
+                Low Confidence Classification: This result has limited statistical significance due to small peer group size. 
+                It should be treated as an investigative lead, not a conclusion.
+              </p>
+            )}
           </section>
 
           {/* Footer */}

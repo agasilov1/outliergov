@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Clock, GitBranch, Hash } from 'lucide-react';
+import { Database, Clock, GitBranch, Hash, AlertTriangle } from 'lucide-react';
 
 interface DatasetRelease {
   id: string;
@@ -42,6 +42,12 @@ export function DataLineagePanel({ datasetRelease, computeRun, isLoading }: Data
     return id.slice(0, 8) + '...';
   };
 
+  const isSyntheticDataset = (release: DatasetRelease) => {
+    return release.dataset_key?.toLowerCase().includes('synthetic') || 
+           release.release_label?.toLowerCase().includes('synthetic') ||
+           release.release_label?.toLowerCase().includes('demo');
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -69,22 +75,33 @@ export function DataLineagePanel({ datasetRelease, computeRun, isLoading }: Data
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            No active dataset. Seed data from the Admin panel.
+            No active dataset. Ingest CMS data from the Admin panel.
           </p>
         </CardContent>
       </Card>
     );
   }
 
+  const isSynthetic = isSyntheticDataset(datasetRelease);
+
   return (
-    <Card>
+    <Card className={isSynthetic ? "border-amber-500/30" : ""}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <Database className="h-4 w-4" />
           Data Lineage
+          {isSynthetic && (
+            <Badge variant="outline" className="text-amber-600 border-amber-600 text-xs">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Demo / Synthetic
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription className="text-xs">
-          Source data and computation metadata
+          {isSynthetic 
+            ? 'Synthetic demonstration data - not for production use'
+            : 'Source data and computation metadata'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>

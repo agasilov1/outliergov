@@ -15,7 +15,7 @@ export default function Methodology() {
         <CardHeader>
           <CardTitle>Anomaly Detection Rule</CardTitle>
           <CardDescription>
-            Version 1.0 — Single transparent rule for identifying outliers
+            Version 1.1 — Two-tier classification system for identifying statistical outliers
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -38,8 +38,8 @@ export default function Methodology() {
           <div>
             <h3 className="mb-2 font-semibold">Flagging Threshold</h3>
             <p className="text-muted-foreground">
-              A provider is flagged if their metric is above the <Badge className="bg-warning text-warning-foreground">99.5th percentile</Badge> of 
-              their peer group for <strong>the required number of consecutive years in the analysis window</strong>.
+              A provider is flagged if their metric is at or above the <Badge className="bg-destructive text-destructive-foreground">99.0th percentile</Badge> of 
+              their peer group for <strong>2 consecutive years</strong> in the analysis window.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               The consecutive year requirement reduces false positives from one-time anomalies while 
@@ -48,10 +48,32 @@ export default function Methodology() {
           </div>
 
           <div className="rounded-lg border bg-muted/50 p-4">
+            <h4 className="mb-3 font-medium">Two-Tier Classification System</h4>
+            
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <Badge variant="destructive" className="shrink-0 mt-0.5">High Confidence</Badge>
+                <div className="text-sm text-muted-foreground">
+                  <p><strong>Criteria:</strong> ≥99.0th percentile for 2 consecutive years, with peer group size ≥20 providers.</p>
+                  <p className="mt-1">These are statistically robust findings suitable for detailed review and investigation.</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <Badge variant="outline" className="shrink-0 mt-0.5 text-amber-600 border-amber-600">Low Confidence</Badge>
+                <div className="text-sm text-muted-foreground">
+                  <p><strong>Criteria:</strong> ≥99.0th percentile for 2 consecutive years, but peer group size &lt;20 providers.</p>
+                  <p className="mt-1">These are investigative leads only. Small peer group sizes limit statistical significance and require additional verification before drawing any conclusions.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
             <h4 className="mb-2 font-medium">Important Disclaimer</h4>
             <p className="text-sm text-muted-foreground">
-              Being flagged as a statistical outlier does not indicate fraud, abuse, or wrongdoing. 
-              Many legitimate factors can cause elevated billing, including:
+              Being identified as a statistical outlier does not indicate fraud, abuse, or wrongdoing. 
+              This analysis surfaces statistical variance only. Many legitimate factors can cause elevated billing, including:
             </p>
             <ul className="mt-2 list-inside list-disc text-sm text-muted-foreground">
               <li>Higher patient acuity or complexity</li>
@@ -61,6 +83,23 @@ export default function Methodology() {
               <li>Practice size and patient volume</li>
             </ul>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data Sources</CardTitle>
+          <CardDescription>
+            Public datasets used for analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            This platform analyzes <strong>CMS Medicare Part B Provider Utilization and Payment Data</strong>, 
+            which is publicly available from the Centers for Medicare & Medicaid Services (CMS). 
+            This dataset contains information about services and procedures provided to Medicare beneficiaries 
+            by physicians and other healthcare professionals.
+          </p>
         </CardContent>
       </Card>
 
