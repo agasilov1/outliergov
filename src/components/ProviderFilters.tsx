@@ -1,0 +1,242 @@
+import { useState, useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ChevronDown, X, Filter } from 'lucide-react';
+
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
+
+interface ProviderFiltersProps {
+  states: string[];
+  specialties: string[];
+  selectedStates: string[];
+  selectedSpecialties: string[];
+  selectedConfidence: ConfidenceLevel[];
+  minPeerSize: number;
+  onStateChange: (states: string[]) => void;
+  onSpecialtyChange: (specialties: string[]) => void;
+  onConfidenceChange: (confidence: ConfidenceLevel[]) => void;
+  onMinPeerSizeChange: (size: number) => void;
+  onClearAll: () => void;
+  totalCount: number;
+  filteredCount: number;
+}
+
+interface MultiSelectFilterProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+}
+
+function MultiSelectFilter({ label, options, selected, onChange }: MultiSelectFilterProps) {
+  const [search, setSearch] = useState('');
+  
+  const filteredOptions = useMemo(() => {
+    if (!search) return options;
+    return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+  }, [options, search]);
+
+  const handleToggle = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(s => s !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selected.length === filteredOptions.length) {
+      onChange([]);
+    } else {
+      onChange([...filteredOptions]);
+    }
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9 gap-1">
+          {label}
+          {selected.length > 0 && (
+            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+              {selected.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-3 w-3 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <div className="p-2 border-b">
+          <Input
+            placeholder={`Search ${label.toLowerCase()}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8"
+          />
+        </div>
+        <div className="p-2 border-b">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-xs"
+            onClick={handleSelectAll}
+          >
+            {selected.length === filteredOptions.length ? 'Deselect All' : 'Select All'}
+          </Button>
+        </div>
+        <ScrollArea className="h-64">
+          <div className="p-2 space-y-1">
+            {filteredOptions.map((option) => (
+              <div
+                key={option}
+                className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                onClick={() => handleToggle(option)}
+              >
+                <Checkbox
+                  checked={selected.includes(option)}
+                  onCheckedChange={() => handleToggle(option)}
+                />
+                <span className="text-sm truncate">{option}</span>
+              </div>
+            ))}
+            {filteredOptions.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No results</p>
+            )}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const confidenceOptions: { value: ConfidenceLevel; label: string; description: string }[] = [
+  { value: 'high', label: 'High', description: 'Peer size ≥ 20' },
+  { value: 'medium', label: 'Medium', description: 'Peer size 10-19' },
+  { value: 'low', label: 'Low', description: 'Peer size < 10' },
+];
+
+export function ProviderFilters({
+  states,
+  specialties,
+  selectedStates,
+  selectedSpecialties,
+  selectedConfidence,
+  minPeerSize,
+  onStateChange,
+  onSpecialtyChange,
+  onConfidenceChange,
+  onMinPeerSizeChange,
+  onClearAll,
+  totalCount,
+  filteredCount,
+}: ProviderFiltersProps) {
+  const hasActiveFilters = 
+    selectedStates.length > 0 || 
+    selectedSpecialties.length > 0 || 
+    selectedConfidence.length > 0 || 
+    minPeerSize > 0;
+
+  const handleConfidenceToggle = (value: ConfidenceLevel) => {
+    if (selectedConfidence.includes(value)) {
+      onConfidenceChange(selectedConfidence.filter(c => c !== value));
+    } else {
+      onConfidenceChange([...selectedConfidence, value]);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Filter className="h-4 w-4" />
+          <span>Filters:</span>
+        </div>
+        
+        <MultiSelectFilter
+          label="State"
+          options={states}
+          selected={selectedStates}
+          onChange={onStateChange}
+        />
+        
+        <MultiSelectFilter
+          label="Specialty"
+          options={specialties}
+          selected={selectedSpecialties}
+          onChange={onSpecialtyChange}
+        />
+        
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1">
+              Confidence
+              {selectedConfidence.length > 0 && (
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                  {selectedConfidence.length}
+                </Badge>
+              )}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-2" align="start">
+            <div className="space-y-1">
+              {confidenceOptions.map((option) => (
+                <div
+                  key={option.value}
+                  className="flex items-center space-x-2 p-2 rounded hover:bg-muted cursor-pointer"
+                  onClick={() => handleConfidenceToggle(option.value)}
+                >
+                  <Checkbox
+                    checked={selectedConfidence.includes(option.value)}
+                    onCheckedChange={() => handleConfidenceToggle(option.value)}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <p className="text-xs text-muted-foreground">{option.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        
+        <div className="flex items-center gap-2">
+          <Label htmlFor="min-peer-size" className="text-sm whitespace-nowrap">
+            Min Peer Size:
+          </Label>
+          <Input
+            id="min-peer-size"
+            type="number"
+            min={0}
+            value={minPeerSize || ''}
+            onChange={(e) => onMinPeerSizeChange(parseInt(e.target.value) || 0)}
+            className="h-9 w-20"
+            placeholder="0"
+          />
+        </div>
+        
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearAll}
+            className="h-9 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear all
+          </Button>
+        )}
+      </div>
+      
+      {/* Results count */}
+      <div className="text-sm text-muted-foreground">
+        Showing {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} statistical outliers
+      </div>
+    </div>
+  );
+}
