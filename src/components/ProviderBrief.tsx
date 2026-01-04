@@ -1,10 +1,10 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Printer, X, AlertTriangle, Search } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { ConfidenceBadge, getConfidenceLevel, getConfidenceLabel } from '@/components/ConfidenceBadge';
 
 interface Provider {
   id: string;
@@ -73,6 +73,8 @@ interface ProviderBriefProps {
   peerStats: PeerStats[];
   datasetRelease?: DatasetRelease | null;
   computeRun?: ComputeRun | null;
+  rank?: number | null;
+  totalProviders?: number | null;
   onClose: () => void;
 }
 
@@ -84,6 +86,8 @@ export function ProviderBrief({
   peerStats,
   datasetRelease,
   computeRun,
+  rank,
+  totalProviders,
   onClose 
 }: ProviderBriefProps) {
   const printRef = useRef<HTMLDivElement>(null);
@@ -124,7 +128,8 @@ export function ProviderBrief({
           npi: provider.npi,
           dataset_release_id: datasetRelease?.id,
           compute_run_id: computeRun?.id,
-          classification: anomalyFlagV2?.flagged ? 'high_confidence' : 'low_confidence'
+          rank,
+          confidence
         }
       });
     }
@@ -132,13 +137,13 @@ export function ProviderBrief({
     window.print();
   };
 
-  const hasLowSampleYear = flagYears.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
   const uniqueYears = [...new Set(flagYears.map(fy => fy.year))].sort();
-  const isHighConfidence = anomalyFlagV2?.flagged === true;
-  const minPeerSize = flagYears.length > 0 ? Math.min(...flagYears.map(fy => fy.peer_size)) : null;
+  const minPeerSize = flagYears.length > 0 ? Math.min(...flagYears.map(fy => fy.peer_size)) : 0;
+  const maxPercentile = flagYears.length > 0 ? Math.max(...flagYears.map(fy => fy.percentile_rank)) : 0;
+  const confidence = getConfidenceLevel(minPeerSize);
+  const confidenceLabel = getConfidenceLabel(confidence);
 
   const getProviderDisplayName = () => {
-    // If provider_name equals NPI, show formatted NPI instead
     if (provider.provider_name === provider.npi) {
       return `Provider NPI ${provider.npi}`;
     }
@@ -178,37 +183,53 @@ export function ProviderBrief({
             </p>
           </div>
 
-          {/* Classification Banner */}
+          {/* Statistical Ranking Section */}
           {anomalyFlagV2 && (
-            <section className={`rounded-lg border p-4 ${isHighConfidence ? 'border-red-500/50 bg-red-500/10' : 'border-amber-500/50 bg-amber-500/10'}`}>
+            <section className={`rounded-lg border p-4 ${
+              confidence === 'high' 
+                ? 'border-emerald-500/50 bg-emerald-500/10' 
+                : confidence === 'medium'
+                ? 'border-amber-500/50 bg-amber-500/10'
+                : 'border-gray-500/50 bg-gray-500/10'
+            }`}>
               <div className="flex items-start gap-3">
-                {isHighConfidence ? (
-                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
-                ) : (
-                  <Search className="h-5 w-5 text-amber-600 mt-0.5" />
-                )}
-                <div>
-                  <h3 className={`font-semibold ${isHighConfidence ? 'text-red-700' : 'text-amber-700'}`}>
-                    Classification: {isHighConfidence ? 'Flagged (High Confidence)' : 'Possible Outlier (Low Confidence)'}
+                <ConfidenceBadge confidence={confidence} />
+                <div className="flex-1">
+                  <h3 className={`font-semibold ${
+                    confidence === 'high' 
+                      ? 'text-emerald-700' 
+                      : confidence === 'medium'
+                      ? 'text-amber-700'
+                      : 'text-gray-700'
+                  }`}>
+                    {confidenceLabel}
                   </h3>
-                  <p className="text-sm mt-1">
-                    {isHighConfidence ? (
-                      <>
-                        This provider met all statistical criteria with adequate peer group size (≥{anomalyFlagV2.min_peer_size_required} providers). 
-                        This is a high-confidence statistical outlier suitable for further review.
-                      </>
-                    ) : (
-                      <>
-                        This provider met statistical criteria but has limited peer group size (&lt;{anomalyFlagV2.min_peer_size_required} providers). 
-                        This is an investigative lead only—additional verification is required before drawing conclusions.
-                      </>
+                  
+                  {/* Ranking info */}
+                  <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                    {rank && totalProviders && (
+                      <div>
+                        <span className="text-muted-foreground">Rank: </span>
+                        <span className="font-semibold">#{rank} of {totalProviders.toLocaleString()}</span>
+                      </div>
                     )}
-                  </p>
-                  {minPeerSize !== null && (
-                    <p className="text-sm mt-2">
-                      <strong>Minimum Peer Group Size:</strong> {minPeerSize} providers
-                    </p>
-                  )}
+                    <div>
+                      <span className="text-muted-foreground">Confidence Level: </span>
+                      <span className="font-semibold capitalize">{confidence}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Max Percentile: </span>
+                      <span className="font-semibold">{formatPercentile(maxPercentile)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Years Above Threshold: </span>
+                      <span className="font-semibold">{flagYears.length}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Min Peer Group Size: </span>
+                      <span className="font-semibold">{minPeerSize} providers</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -282,7 +303,7 @@ export function ProviderBrief({
             {anomalyFlagV2 && (
               <p className="mb-4 text-sm">
                 This provider's total allowed amount ranked at or above the {anomalyFlagV2.threshold_percentile_required}th percentile 
-                within their peer group ({anomalyFlagV2.peer_group_key}) for {anomalyFlagV2.consecutive_years_required} consecutive years.
+                within their peer group ({anomalyFlagV2.peer_group_key}) for {flagYears.length} years.
                 {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
                   <span className="block mt-2 text-amber-600">
                     <strong>Classification Note:</strong> {anomalyFlagV2.flag_reason}
@@ -359,36 +380,17 @@ export function ProviderBrief({
             </table>
           </section>
 
-          {/* Low Sample Warning */}
-          {hasLowSampleYear && (
-            <section className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-amber-700">Low Sample Size Notice</h3>
-                  <p className="text-sm text-amber-700">
-                    This peer group contains fewer than {anomalyFlagV2?.min_peer_size_required || 20} providers 
-                    in one or more analysis years. Statistical significance of percentile rankings is limited.
-                    This result should be treated as an investigative lead requiring additional verification.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
-
           {/* Methodology Reference */}
           <section>
             <h2 className="mb-3 text-lg font-semibold">Methodology</h2>
             <p className="text-sm">
               Peer groups are defined by {anomalyFlagV2?.peer_group_key || 'specialty and state'}. 
               Percentile rank is calculated using the PERCENT_RANK function on {anomalyFlagV2?.metric_name || 'total allowed amounts'} 
-              within each peer group for each calendar year. A provider is classified as a <strong>high-confidence</strong> statistical outlier 
-              if their percentile rank is at or above {anomalyFlagV2?.threshold_percentile_required || 99.0} for {anomalyFlagV2?.consecutive_years_required || 2} consecutive years, 
-              and the peer group contains at least {anomalyFlagV2?.min_peer_size_required || 20} providers.
+              within each peer group for each calendar year. Providers are ranked by maximum percentile across analyzed years.
             </p>
             <p className="text-sm mt-2">
-              Providers meeting percentile criteria but with peer groups below the minimum size threshold are classified as 
-              <strong> low-confidence / possible outliers</strong>. These require additional review before any conclusions can be drawn.
+              <strong>Confidence levels:</strong> High (peer size ≥ 20), Medium (peer size 10-19), Low (peer size &lt; 10). 
+              Confidence reflects statistical significance of the peer comparison, not severity of the anomaly.
             </p>
             {anomalyFlagV2 && (
               <p className="mt-2 text-sm">
@@ -402,6 +404,9 @@ export function ProviderBrief({
           <section className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
             <h2 className="mb-2 font-semibold">Important Disclaimer</h2>
             <p className="text-sm">
+              <strong>This ranking reflects statistical variance only and is intended for prioritization, not conclusions.</strong>
+            </p>
+            <p className="text-sm mt-2">
               This report identifies statistical outliers based on publicly available Medicare 
               payment data. A high percentile rank indicates that a provider received more in 
               allowed amounts than most peers in their specialty and state. <strong>This is not 
@@ -414,12 +419,6 @@ export function ProviderBrief({
               Any conclusions regarding provider conduct must be based on detailed chart review, 
               expert consultation, and independent verification of the underlying data.
             </p>
-            {!isHighConfidence && (
-              <p className="mt-2 text-sm font-semibold text-amber-700">
-                Low Confidence Classification: This result has limited statistical significance due to small peer group size. 
-                It should be treated as an investigative lead, not a conclusion.
-              </p>
-            )}
           </section>
 
           {/* Footer */}

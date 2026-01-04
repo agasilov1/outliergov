@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, AlertTriangle, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle, Search } from 'lucide-react';
+import { ArrowLeft, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { PeerDistributionChart } from '@/components/PeerDistributionChart';
 import { YearlyComparisonChart } from '@/components/YearlyComparisonChart';
 import { ProviderBrief } from '@/components/ProviderBrief';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { DataLineagePanel } from '@/components/DataLineagePanel';
+import { ConfidenceBadge, getConfidenceLevel, getConfidenceLabel } from '@/components/ConfidenceBadge';
 import { useState, useEffect, useMemo } from 'react';
 
 interface Provider {
@@ -85,9 +86,16 @@ interface ComputeRun {
 
 export default function ProviderDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [showBrief, setShowBrief] = useState(false);
+
+  // Get rank from URL params
+  const rankFromUrl = searchParams.get('rank');
+  const totalFromUrl = searchParams.get('total');
+  const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
+  const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : null;
 
   // Log provider view for audit
   useEffect(() => {
@@ -311,13 +319,15 @@ export default function ProviderDetail() {
 
   const hasLowSampleYear = flagYears?.some(y => y.peer_size < (anomalyFlagV2?.min_peer_size_required || 20));
   
-  // Determine classification
-  const isHighConfidence = anomalyFlagV2?.flagged === true;
-  const isLowConfidence = anomalyFlagV2 && !anomalyFlagV2.flagged;
+  // Determine confidence level based on min peer size
+  const minPeerSize = flagYears && flagYears.length > 0 
+    ? Math.min(...flagYears.map(fy => fy.peer_size)) 
+    : 0;
+  const confidence = getConfidenceLevel(minPeerSize);
+  const confidenceLabel = getConfidenceLabel(confidence);
 
   const getProviderDisplayName = () => {
     if (!provider) return 'Unknown';
-    // If provider_name equals NPI, show formatted NPI instead
     if (provider.provider_name === provider.npi) {
       return `Provider NPI ${provider.npi}`;
     }
@@ -371,19 +381,18 @@ export default function ProviderDetail() {
               <CardDescription className="mt-1">
                 NPI: {provider.npi} • {provider.specialty} • {provider.state}
               </CardDescription>
+              {/* Rank indicator */}
+              {rank && totalProviders && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Ranked #{rank} of {totalProviders.toLocaleString()} statistical outliers
+                </p>
+              )}
             </div>
             {anomalyFlagV2 && (
-              isHighConfidence ? (
-                <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
-                  <AlertTriangle className="h-4 w-4" />
-                  Flagged (High Confidence)
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 text-amber-600 border-amber-600">
-                  <Search className="h-4 w-4" />
-                  Possible Outlier (Low Confidence)
-                </Badge>
-              )
+              <div className="flex flex-col items-end gap-2">
+                <ConfidenceBadge confidence={confidence} className="px-3 py-1" />
+                <span className="text-xs text-muted-foreground">{confidenceLabel}</span>
+              </div>
             )}
           </div>
         </CardHeader>
@@ -397,10 +406,14 @@ export default function ProviderDetail() {
                 </div>
               ))}
               <div>
-                <span className="text-muted-foreground">Peer Group Size: </span>
+                <span className="text-muted-foreground">Min Peer Group Size: </span>
                 <span className="font-semibold">
-                  {flagYears[0]?.peer_size || '-'} providers
+                  {minPeerSize} providers
                 </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Years Above Threshold: </span>
+                <span className="font-semibold">{flagYears.length}</span>
               </div>
             </div>
             {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
@@ -415,29 +428,42 @@ export default function ProviderDetail() {
 
       {/* Classification Explanation Card */}
       {anomalyFlagV2 && (
-        <Card className={isHighConfidence ? "border-destructive/30 bg-destructive/5" : "border-amber-500/30 bg-amber-500/5"}>
+        <Card className={
+          confidence === 'high' 
+            ? "border-emerald-500/30 bg-emerald-500/5" 
+            : confidence === 'medium'
+            ? "border-amber-500/30 bg-amber-500/5"
+            : "border-gray-500/30 bg-gray-500/5"
+        }>
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
-              {isHighConfidence ? (
-                <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
-              ) : (
-                <Search className="h-5 w-5 text-amber-600 mt-0.5" />
-              )}
+              <ConfidenceBadge confidence={confidence} />
               <div>
-                <h3 className={`font-semibold ${isHighConfidence ? 'text-destructive' : 'text-amber-700'}`}>
-                  {isHighConfidence ? 'High Confidence Classification' : 'Low Confidence Classification'}
+                <h3 className={`font-semibold ${
+                  confidence === 'high' 
+                    ? 'text-emerald-700' 
+                    : confidence === 'medium'
+                    ? 'text-amber-700'
+                    : 'text-gray-700'
+                }`}>
+                  {confidenceLabel}
                 </h3>
                 <p className="text-sm mt-1">
-                  {isHighConfidence ? (
+                  {confidence === 'high' ? (
                     <>
                       This provider's total allowed amount ranked at or above the {anomalyFlagV2.threshold_percentile_required}th percentile 
-                      within their peer group for {anomalyFlagV2.consecutive_years_required} consecutive years, with a peer group size of at least {anomalyFlagV2.min_peer_size_required} providers. 
-                      This meets the criteria for high-confidence statistical outlier classification.
+                      within their peer group for {flagYears?.length || anomalyFlagV2.consecutive_years_required} years, with a peer group size of at least {anomalyFlagV2.min_peer_size_required} providers. 
+                      This is statistical variance only—not evidence of any wrongdoing.
+                    </>
+                  ) : confidence === 'medium' ? (
+                    <>
+                      This provider meets statistical outlier criteria with a peer group size of {minPeerSize} providers (10-19 range). 
+                      Moderate confidence due to smaller peer group—use as an investigative lead with additional review.
                     </>
                   ) : (
                     <>
-                      This provider meets statistical outlier criteria but is classified as low confidence due to limited peer group size (&lt;{anomalyFlagV2.min_peer_size_required} providers). 
-                      This result should be treated as an investigative lead requiring additional verification—not a conclusion.
+                      This provider meets statistical outlier criteria but is classified as lower confidence due to limited peer group size (&lt;10 providers). 
+                      This result should be treated as an investigative lead requiring additional verification.
                     </>
                   )}
                 </p>
@@ -679,6 +705,8 @@ export default function ProviderDetail() {
           peerStats={peerStats}
           datasetRelease={datasetRelease}
           computeRun={computeRun}
+          rank={rank}
+          totalProviders={totalProviders}
           onClose={() => setShowBrief(false)}
         />
       )}
