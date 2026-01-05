@@ -8,7 +8,8 @@ const corsHeaders = {
 interface IngestRequest {
   dataset_key: string;
   release_label: string;
-  source_urls: string[];
+  source_urls?: string[];
+  source_url?: string; // Alias for source_urls[0]
   created_by?: string | null;
 }
 
@@ -180,56 +181,100 @@ Deno.serve(async (req) => {
 
     // Parse request
     const body: IngestRequest = await req.json();
-    const { dataset_key, release_label, source_urls, created_by } = body;
+    const { dataset_key, release_label, source_urls, source_url, created_by } = body;
 
-    console.log(`[Ingest] Starting ingestion for dataset_key="${dataset_key}", ${source_urls.length} files`);
+    // Normalize source_url alias to source_urls
+    const urls = source_urls ?? (source_url ? [source_url] : []);
 
-    // Validate inputs
-    if (!dataset_key || !release_label || !source_urls || source_urls.length === 0) {
+    console.log(`[Ingest] Request received: dataset_key="${dataset_key}", urls=${urls.length}`);
+
+    // Validate required fields
+    if (!dataset_key || !release_label) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: dataset_key, release_label, source_urls" }),
+        JSON.stringify({ error: "Missing required fields: dataset_key, release_label" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step 1: Deprecate existing active release for this dataset_key
-    const { data: existingRelease } = await supabase
+    // Validate: at least one URL required
+    if (urls.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Missing source_urls: at least one URL required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate: exactly one URL allowed (single-file mode)
+    if (urls.length > 1) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Multiple source_urls not supported. Process one file per invocation.",
+          hint: "Call this function separately for each file."
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const sourceUrl = urls[0];
+    console.log(`[Ingest] Starting single-file ingestion for dataset_key="${dataset_key}"`);
+
+    // Step 1: Resolve dataset release - reuse existing or create new
+    let datasetReleaseId: string;
+
+    // Check for existing active release matching (dataset_key, release_label)
+    const { data: existingMatchingRelease } = await supabase
       .from("dataset_releases")
       .select("id")
       .eq("dataset_key", dataset_key)
+      .eq("release_label", release_label)
       .eq("status", "active")
-      .single();
+      .maybeSingle();
 
-    if (existingRelease) {
-      console.log(`[Ingest] Deprecating existing release: ${existingRelease.id}`);
-      await supabase
+    if (existingMatchingRelease) {
+      // Reuse existing release
+      datasetReleaseId = existingMatchingRelease.id;
+      console.log(`[Ingest] Reusing existing dataset release: ${datasetReleaseId}`);
+    } else {
+      // Deprecate any OTHER active release for this dataset_key (different release_label)
+      const { data: otherActiveRelease } = await supabase
         .from("dataset_releases")
-        .update({ status: "deprecated" })
-        .eq("id", existingRelease.id);
+        .select("id")
+        .eq("dataset_key", dataset_key)
+        .eq("status", "active")
+        .neq("release_label", release_label)
+        .maybeSingle();
+
+      if (otherActiveRelease) {
+        console.log(`[Ingest] Deprecating old release: ${otherActiveRelease.id}`);
+        await supabase
+          .from("dataset_releases")
+          .update({ status: "deprecated" })
+          .eq("id", otherActiveRelease.id);
+      }
+
+      // Create new release
+      const { data: newRelease, error: releaseError } = await supabase
+        .from("dataset_releases")
+        .insert({
+          dataset_key,
+          release_label,
+          status: "active",
+          source_url: sourceUrl,
+          notes: "CMS Medicare Part B ingestion",
+          ingested_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (releaseError || !newRelease) {
+        throw new Error(`Failed to create dataset release: ${releaseError?.message}`);
+      }
+
+      datasetReleaseId = newRelease.id;
+      console.log(`[Ingest] Created new dataset release: ${datasetReleaseId}`);
     }
 
-    // Step 2: Create new dataset release
-    const { data: newRelease, error: releaseError } = await supabase
-      .from("dataset_releases")
-      .insert({
-        dataset_key,
-        release_label,
-        status: "active",
-        source_url: "CMS Medicare Part B Public Use Files",
-        notes: "Annual CMS provider metrics ingestion",
-        ingested_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-
-    if (releaseError || !newRelease) {
-      throw new Error(`Failed to create dataset release: ${releaseError?.message}`);
-    }
-
-    const datasetReleaseId = newRelease.id;
-    console.log(`[Ingest] Created dataset release: ${datasetReleaseId}`);
-
-    // Step 3: Create compute run record
+    // Step 2: Create compute run record
     const { data: computeRun, error: computeRunError } = await supabase
       .from("compute_runs")
       .insert({
@@ -239,7 +284,7 @@ Deno.serve(async (req) => {
         parameters_json: {
           dataset_key,
           release_label,
-          source_urls,
+          source_url: sourceUrl,
         },
         created_by: created_by || null,
         status: "running",
@@ -270,148 +315,155 @@ Deno.serve(async (req) => {
     // NPI to provider_id cache
     const npiToProviderId = new Map<string, string>();
 
-    // Step 4: Process each source URL
-    for (let fileIdx = 0; fileIdx < source_urls.length; fileIdx++) {
-      const url = source_urls[fileIdx];
-      const fileStartTime = Date.now();
-      console.log(`[Ingest] Processing file ${fileIdx + 1}/${source_urls.length}: ${url.substring(0, 80)}...`);
+    // Step 3: Process single source file
+    const fileStartTime = Date.now();
+    console.log(`[Ingest] CHECKPOINT: Fetch started for ${sourceUrl.substring(0, 80)}...`);
 
-      try {
-        let batchRows: CsvRow[] = [];
-        let fileProvidersCreated = 0;
-        let fileMetricsInserted = 0;
-        let fileMetricsUpdated = 0;
-        let fileRowsSkipped = 0;
-        const BATCH_SIZE = 1000;
+    let batchRows: CsvRow[] = [];
+    let fileProvidersCreated = 0;
+    let fileMetricsInserted = 0;
+    let fileMetricsUpdated = 0;
+    let fileRowsSkipped = 0;
+    let totalRows = 0;
+    let firstRowLogged = false;
+    const BATCH_SIZE = 1000;
 
-        // Process batch function
-        const processBatch = async (rows: CsvRow[]) => {
-          if (rows.length === 0) return;
+    // Process batch function
+    const processBatch = async (rows: CsvRow[]) => {
+      if (rows.length === 0) return;
 
-          // Get unique NPIs in this batch
-          const uniqueNpis = [...new Set(rows.map((r) => r.npi))];
-          const uncachedNpis = uniqueNpis.filter((npi) => !npiToProviderId.has(npi));
+      // Get unique NPIs in this batch
+      const uniqueNpis = [...new Set(rows.map((r) => r.npi))];
+      const uncachedNpis = uniqueNpis.filter((npi) => !npiToProviderId.has(npi));
 
-          if (uncachedNpis.length > 0) {
-            // Upsert providers (ON CONFLICT DO NOTHING)
-            const providerInserts = uncachedNpis.map((npi) => ({
-              npi,
-              provider_name: npi,
-              specialty: "Unknown",
-              state: "UNK",
-              entity_type: "unknown",
-            }));
+      if (uncachedNpis.length > 0) {
+        // Upsert providers (ON CONFLICT DO NOTHING)
+        const providerInserts = uncachedNpis.map((npi) => ({
+          npi,
+          provider_name: npi,
+          specialty: "Unknown",
+          state: "UNK",
+          entity_type: "unknown",
+        }));
 
-            const { error: providerError } = await supabase
-              .from("providers")
-              .upsert(providerInserts, { onConflict: "npi", ignoreDuplicates: true });
+        const { error: providerError } = await supabase
+          .from("providers")
+          .upsert(providerInserts, { onConflict: "npi", ignoreDuplicates: true });
 
-            if (providerError) {
-              console.error(`[Ingest] Provider upsert error: ${providerError.message}`);
-            }
-
-            // Fetch provider IDs for uncached NPIs
-            const { data: providers } = await supabase
-              .from("providers")
-              .select("id, npi")
-              .in("npi", uncachedNpis);
-
-            if (providers) {
-              for (const p of providers) {
-                if (!npiToProviderId.has(p.npi)) {
-                  npiToProviderId.set(p.npi, p.id);
-                  fileProvidersCreated++;
-                }
-              }
-            }
-          }
-
-          // Build metrics for upsert
-          const metricsInserts = rows
-            .filter((r) => npiToProviderId.has(r.npi))
-            .map((r) => ({
-              provider_id: npiToProviderId.get(r.npi)!,
-              dataset_release_id: datasetReleaseId,
-              year: r.year,
-              total_allowed_amount: r.total_allowed_amount,
-              total_payment_amount: r.total_allowed_amount * 0.8, // Required NOT NULL field
-              service_count: r.service_count,
-              beneficiary_count: r.beneficiary_count,
-            }));
-
-          if (metricsInserts.length > 0) {
-            // Use raw SQL for proper ON CONFLICT DO UPDATE
-            // Supabase JS client's upsert doesn't support partial updates well
-            const { data: upsertResult, error: metricsError } = await supabase.rpc(
-              "batch_upsert_metrics",
-              { metrics_json: JSON.stringify(metricsInserts) }
-            ).maybeSingle();
-
-            // If the RPC doesn't exist, fall back to individual upserts
-            if (metricsError?.message?.includes("function") || metricsError?.code === "42883") {
-              // Fallback: use upsert with update
-              for (const metric of metricsInserts) {
-                const { error: singleError } = await supabase
-                  .from("provider_yearly_metrics")
-                  .upsert(metric, {
-                    onConflict: "provider_id,year",
-                  });
-                
-                if (singleError) {
-                  console.error(`[Ingest] Metric upsert error: ${singleError.message}`);
-                  fileRowsSkipped++;
-                } else {
-                  fileMetricsInserted++;
-                }
-              }
-            } else if (metricsError) {
-              console.error(`[Ingest] Metrics batch error: ${metricsError.message}`);
-              fileRowsSkipped += metricsInserts.length;
-            } else {
-              fileMetricsInserted += metricsInserts.length;
-            }
-          }
-        };
-
-        // Stream and process CSV
-        for await (const { row, lineNumber } of streamCsv(url)) {
-          if (row === null) {
-            fileRowsSkipped++;
-            continue;
-          }
-
-          result.providers_seen++;
-          batchRows.push(row);
-
-          if (batchRows.length >= BATCH_SIZE) {
-            await processBatch(batchRows);
-            console.log(`[Ingest] File ${fileIdx + 1}: Processed ${lineNumber} rows...`);
-            batchRows = [];
-          }
+        if (providerError) {
+          console.error(`[Ingest] Provider upsert error: ${providerError.message}`);
         }
 
-        // Process remaining rows
+        // Fetch provider IDs for uncached NPIs
+        const { data: providers } = await supabase
+          .from("providers")
+          .select("id, npi")
+          .in("npi", uncachedNpis);
+
+        if (providers) {
+          for (const p of providers) {
+            if (!npiToProviderId.has(p.npi)) {
+              npiToProviderId.set(p.npi, p.id);
+              fileProvidersCreated++;
+            }
+          }
+        }
+      }
+
+      // Build metrics for upsert
+      const metricsInserts = rows
+        .filter((r) => npiToProviderId.has(r.npi))
+        .map((r) => ({
+          provider_id: npiToProviderId.get(r.npi)!,
+          dataset_release_id: datasetReleaseId,
+          year: r.year,
+          total_allowed_amount: r.total_allowed_amount,
+          total_payment_amount: r.total_allowed_amount * 0.8, // Required NOT NULL field
+          service_count: r.service_count,
+          beneficiary_count: r.beneficiary_count,
+        }));
+
+      if (metricsInserts.length > 0) {
+        // Use raw SQL for proper ON CONFLICT DO UPDATE
+        const { data: upsertResult, error: metricsError } = await supabase.rpc(
+          "batch_upsert_metrics",
+          { metrics_json: JSON.stringify(metricsInserts) }
+        ).maybeSingle();
+
+        // If the RPC doesn't exist, fall back to individual upserts
+        if (metricsError?.message?.includes("function") || metricsError?.code === "42883") {
+          // Fallback: use upsert with update
+          for (const metric of metricsInserts) {
+            const { error: singleError } = await supabase
+              .from("provider_yearly_metrics")
+              .upsert(metric, {
+                onConflict: "provider_id,year",
+              });
+            
+            if (singleError) {
+              console.error(`[Ingest] Metric upsert error: ${singleError.message}`);
+              fileRowsSkipped++;
+            } else {
+              fileMetricsInserted++;
+            }
+          }
+        } else if (metricsError) {
+          console.error(`[Ingest] Metrics batch error: ${metricsError.message}`);
+          fileRowsSkipped += metricsInserts.length;
+        } else {
+          fileMetricsInserted += metricsInserts.length;
+        }
+
+        console.log(`[Ingest] CHECKPOINT: Batch upsert complete for ${metricsInserts.length} metrics`);
+      }
+    };
+
+    // Stream and process CSV with checkpoint logging
+    for await (const { row, lineNumber } of streamCsv(sourceUrl)) {
+      // Log first row parsed
+      if (!firstRowLogged && row !== null) {
+        console.log(`[Ingest] CHECKPOINT: First row parsed at ${Date.now() - startTime}ms`);
+        firstRowLogged = true;
+      }
+
+      if (row === null) {
+        fileRowsSkipped++;
+        continue;
+      }
+
+      totalRows++;
+      result.providers_seen++;
+      batchRows.push(row);
+
+      if (batchRows.length >= BATCH_SIZE) {
         await processBatch(batchRows);
+        batchRows = [];
 
-        // Update results
-        result.providers_created += fileProvidersCreated;
-        result.metrics_inserted += fileMetricsInserted;
-        result.metrics_updated += fileMetricsUpdated;
-        result.rows_skipped += fileRowsSkipped;
-        result.files_processed++;
-        result.timing[`file_${fileIdx}_seconds`] = (Date.now() - fileStartTime) / 1000;
-
-        console.log(
-          `[Ingest] File ${fileIdx + 1} complete: providers_created=${fileProvidersCreated}, metrics=${fileMetricsInserted}, skipped=${fileRowsSkipped}, time=${result.timing[`file_${fileIdx}_seconds`].toFixed(1)}s`
-        );
-      } catch (fileError) {
-        console.error(`[Ingest] File ${fileIdx + 1} failed: ${fileError}`);
-        result.timing[`file_${fileIdx}_seconds`] = -1; // Mark as failed
-        // Continue to next file - don't abort entire ingestion
+        // Log every 50,000 rows
+        if (totalRows % 50000 < BATCH_SIZE) {
+          console.log(`[Ingest] CHECKPOINT: ${totalRows} rows processed, ${fileProvidersCreated} providers`);
+        }
       }
     }
 
-    // Step 5: Update compute run status
+    // Process remaining rows
+    if (batchRows.length > 0) {
+      await processBatch(batchRows);
+      console.log(`[Ingest] CHECKPOINT: Final batch upsert complete for ${batchRows.length} metrics`);
+    }
+
+    const fileSeconds = (Date.now() - fileStartTime) / 1000;
+    console.log(`[Ingest] CHECKPOINT: File complete, ${totalRows} rows in ${fileSeconds.toFixed(1)}s`);
+
+    // Update results
+    result.providers_created = fileProvidersCreated;
+    result.metrics_inserted = fileMetricsInserted;
+    result.metrics_updated = fileMetricsUpdated;
+    result.rows_skipped = fileRowsSkipped;
+    result.files_processed = 1;
+    result.timing.file_seconds = fileSeconds;
+
+    // Step 4: Update compute run status
     result.timing.total_seconds = (Date.now() - startTime) / 1000;
 
     await supabase
@@ -422,7 +474,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", computeRunId);
 
-    // Step 6: Audit log
+    // Step 5: Audit log
     await supabase.from("audit_log").insert({
       action: "ingest_provider_metrics",
       entity_type: "dataset_releases",
