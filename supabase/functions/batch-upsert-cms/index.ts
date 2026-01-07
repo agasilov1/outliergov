@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Bulk upsert providers by npi
+    // 1. Bulk upsert providers by npi and get IDs via RETURNING
     const providerRecords = rows.map((row) => ({
       npi: row.npi,
       provider_name: row.provider_name,
@@ -68,29 +68,15 @@ Deno.serve(async (req) => {
       entity_type: row.entity_type || "unknown",
     }));
 
-    const { error: providerError } = await supabaseAdmin
+    const { data: providers, error: providerError } = await supabaseAdmin
       .from("providers")
-      .upsert(providerRecords, { onConflict: "npi", ignoreDuplicates: false });
+      .upsert(providerRecords, { onConflict: "npi", ignoreDuplicates: false })
+      .select("id, npi");
 
     if (providerError) {
       console.error("Provider upsert error:", providerError);
       return new Response(
         JSON.stringify({ error: `Provider upsert failed: ${providerError.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 2. Fetch provider IDs for all NPIs in batch
-    const npis = [...new Set(rows.map((r) => r.npi))];
-    const { data: providers, error: selectError } = await supabaseAdmin
-      .from("providers")
-      .select("id, npi")
-      .in("npi", npis);
-
-    if (selectError) {
-      console.error("Provider select error:", selectError);
-      return new Response(
-        JSON.stringify({ error: `Provider select failed: ${selectError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
