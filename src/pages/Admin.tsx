@@ -52,8 +52,14 @@ interface DatasetRelease {
   ingested_at: string | null;
 }
 
+const PROTECTED_ADMIN_EMAIL = 'arifgasilov123@gmail.com';
+
 export default function Admin() {
   const { user, session } = useAuth();
+  
+  const isProtectedUser = (userEmail: string) => {
+    return userEmail.toLowerCase() === PROTECTED_ADMIN_EMAIL.toLowerCase();
+  };
   const [activeSection, setActiveSection] = useState<'users' | 'firms' | 'data' | 'audit'>('users');
   
   // Data management state
@@ -653,10 +659,10 @@ export default function Admin() {
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-3">
                             <div className="flex items-center gap-2">
-                              <Switch
+                            <Switch
                                 checked={u.expired || false}
                                 onCheckedChange={() => handleToggleExpired(u.id, u.expired || false)}
-                                disabled={expiringUserId === u.id || u.id === user?.id}
+                                disabled={expiringUserId === u.id || u.id === user?.id || isProtectedUser(u.email)}
                               />
                               <span className={`text-xs font-medium ${u.expired ? 'text-amber-600' : 'text-green-600'}`}>
                                 {expiringUserId === u.id ? (
@@ -668,7 +674,7 @@ export default function Admin() {
                               variant="ghost" 
                               size="sm" 
                               onClick={() => setUserToDelete(u)}
-                              disabled={u.id === user?.id}
+                              disabled={u.id === user?.id || isProtectedUser(u.email)}
                               className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
