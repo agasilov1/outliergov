@@ -455,6 +455,11 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Watermark footer for screenshot protection */}
+      <div className="text-center text-xs text-muted-foreground py-4 border-t">
+        Statistical analysis • Public data • Not a finding of wrongdoing
+      </div>
     </div>
   );
 }

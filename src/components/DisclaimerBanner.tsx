@@ -10,8 +10,8 @@ export function DisclaimerBanner({ variant = 'default' }: DisclaimerBannerProps)
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <span>
         {variant === 'detailed' 
-          ? 'This analysis surfaces statistical variance only. It does not imply wrongdoing. Many benign explanations exist for outlier status.'
-          : 'This tool surfaces statistical anomalies in public data. It does not allege fraud or wrongdoing.'
+          ? 'This registry identifies statistically extreme Medicare billing patterns using public data. Inclusion does not imply fraud, illegality, or improper conduct.'
+          : 'This registry identifies statistically extreme billing patterns. Inclusion does not imply fraud or wrongdoing.'
         }
       </span>
     </div>
