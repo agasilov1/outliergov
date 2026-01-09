@@ -56,18 +56,36 @@ export default function Dashboard() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch ALL data from anomalies_offline (increased limit to get all ~12k rows)
-  const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
-    queryKey: ['anomalies-offline'],
-    queryFn: async () => {
+  // Fetch ALL data from anomalies_offline using pagination to bypass server limits
+  const fetchAllAnomalies = async (): Promise<AnomalyOffline[]> => {
+    const PAGE_SIZE = 1000;
+    let allData: AnomalyOffline[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
       const { data, error } = await supabase
         .from('anomalies_offline')
         .select('*')
-        .limit(15000);
-      
+        .range(from, from + PAGE_SIZE - 1);
+
       if (error) throw error;
-      return data as AnomalyOffline[];
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += PAGE_SIZE;
+        hasMore = data.length === PAGE_SIZE;
+      } else {
+        hasMore = false;
+      }
     }
+
+    return allData;
+  };
+
+  const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
+    queryKey: ['anomalies-offline-all'],
+    queryFn: fetchAllAnomalies,
   });
 
   // Aggregate providers from anomalies_offline
