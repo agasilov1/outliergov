@@ -7,7 +7,7 @@ export default function Methodology() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Methodology</h1>
         <p className="text-muted-foreground">
-          How we identify statistical outliers in healthcare spending data
+          How providers are verified for inclusion in the outlier registry
         </p>
       </div>
 
@@ -15,7 +15,7 @@ export default function Methodology() {
         <CardHeader>
           <CardTitle>Anomaly Detection Rule</CardTitle>
           <CardDescription>
-            Version 1.1 — Verified statistical outlier identification
+            Version 1.2 — Verified extreme outlier identification
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -36,21 +36,26 @@ export default function Methodology() {
           </div>
 
           <div>
-            <h3 className="mb-2 font-semibold">Flagging Threshold</h3>
+            <h3 className="mb-2 font-semibold">Inclusion Threshold</h3>
             <p className="text-muted-foreground">
-              A provider is flagged if their metric is at or above the <Badge className="bg-destructive text-destructive-foreground">Top 0.5% (≥99.5th percentile)</Badge> of 
-              their peer group for <strong>2 consecutive years</strong> in the analysis window.
+              A provider is included in this registry if their total allowed amount ranked within the <Badge className="bg-destructive text-destructive-foreground">Top 0.5% (≥99.5th percentile)</Badge> of 
+              their specialty-state peer group for <strong>2 consecutive years</strong> within the analysis window.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              The consecutive year requirement reduces false positives from one-time anomalies while 
-              identifying providers with consistently elevated billing patterns.
+              The consecutive-year requirement reduces noise from one-time billing spikes and focuses on 
+              providers with sustained extreme billing patterns.
             </p>
           </div>
 
-          <div className="rounded-lg border bg-muted/50 p-4">
-            <p className="text-sm text-muted-foreground">
-              <strong>All providers shown met minimum statistical validity thresholds.</strong> Rankings are by 
-              total Medicare billing volume among verified outliers, not by percentile rank.
+          <div>
+            <h3 className="mb-2 font-semibold">Verification Approach</h3>
+            <p className="text-muted-foreground">
+              All providers displayed have met minimum statistical validity thresholds during offline analysis 
+              prior to inclusion. This registry represents a curated set of verified extreme outliers rather 
+              than a full percentile distribution.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Rankings are by total Medicare billing volume among verified outliers, not by percentile rank.
             </p>
           </div>
 

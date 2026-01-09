@@ -8,7 +8,7 @@ export default function DataSources() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Data Sources</h1>
         <p className="text-muted-foreground">
-          Public datasets used for anomaly analysis
+          Public datasets powering the verified outlier registry
         </p>
       </div>
 
@@ -96,8 +96,8 @@ export default function DataSources() {
             <h4 className="mb-2 font-medium">Percentile Calculation</h4>
             <p className="text-sm text-muted-foreground">
               Within each peer group, we calculate the percentile rank of each provider's 
-              total allowed amount. Providers above the 99.5th percentile across all 
-              consecutive years in the analysis window are flagged for review.
+              total allowed amount. Providers within the top 0.5% (≥99.5th percentile) for 
+              two consecutive years are included in the verified outlier registry.
             </p>
           </div>
         </CardContent>
