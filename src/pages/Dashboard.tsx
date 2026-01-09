@@ -45,6 +45,17 @@ interface AggregatedProvider {
 
 const ITEMS_PER_PAGE = 100;
 
+// Institutional specialties to exclude by default
+const INSTITUTIONAL_SPECIALTIES = [
+  'pharmacy',
+  'centralized flu',
+  'portable xray supplier',
+  'clinical laboratory',
+  'idtf',
+  'ambulance service',
+  'ambulatory surgical'
+];
+
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
   const navigate = useNavigate();
@@ -52,6 +63,7 @@ export default function Dashboard() {
   // Filter state
   const [stateFilter, setStateFilter] = useState<string[]>([]);
   const [specialtyFilter, setSpecialtyFilter] = useState<string[]>([]);
+  const [excludeInstitutional, setExcludeInstitutional] = useState(true); // Default ON
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -156,11 +168,18 @@ export default function Dashboard() {
   // Apply filters
   const filteredProviders = useMemo(() => {
     return rankedProviders.filter(p => {
+      // Institutional filter (default ON - excludes institutional entities)
+      if (excludeInstitutional) {
+        const specialtyLower = p.specialty.toLowerCase();
+        if (INSTITUTIONAL_SPECIALTIES.some(inst => specialtyLower.includes(inst))) {
+          return false;
+        }
+      }
       if (stateFilter.length > 0 && !stateFilter.includes(p.state)) return false;
       if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.specialty)) return false;
       return true;
     });
-  }, [rankedProviders, stateFilter, specialtyFilter]);
+  }, [rankedProviders, stateFilter, specialtyFilter, excludeInstitutional]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProviders.length / ITEMS_PER_PAGE);
@@ -172,7 +191,7 @@ export default function Dashboard() {
   // Reset to page 1 when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [stateFilter, specialtyFilter]);
+  }, [stateFilter, specialtyFilter, excludeInstitutional]);
 
   // Derive unique years from anomalies_offline
   const uniqueYears = useMemo(() => {
@@ -215,6 +234,7 @@ export default function Dashboard() {
   const handleClearAllFilters = () => {
     setStateFilter([]);
     setSpecialtyFilter([]);
+    setExcludeInstitutional(true); // Reset to default ON
   };
 
   // Generate page numbers for pagination
@@ -345,6 +365,8 @@ export default function Dashboard() {
             onClearAll={handleClearAllFilters}
             totalCount={rankedProviders.length}
             filteredCount={filteredProviders.length}
+            excludeInstitutional={excludeInstitutional}
+            onExcludeInstitutionalChange={setExcludeInstitutional}
           />
 
           {/* Table */}
@@ -475,8 +497,12 @@ export default function Dashboard() {
       </Card>
 
       {/* Watermark footer for screenshot protection */}
-      <div className="text-center text-xs text-muted-foreground py-4 border-t">
-        Statistical analysis • Public data • Not a finding of wrongdoing
+      <div className="text-center text-xs text-muted-foreground py-4 border-t space-y-1">
+        <p>Statistical analysis • Public data • Not a finding of wrongdoing</p>
+        <p className="text-muted-foreground/70">
+          Outputs are for internal analysis and screening only and may not be publicly 
+          distributed or presented as factual findings.
+        </p>
       </div>
     </div>
   );

@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronDown, X, Filter } from 'lucide-react';
@@ -17,6 +19,8 @@ interface ProviderFiltersProps {
   onClearAll: () => void;
   totalCount: number;
   filteredCount: number;
+  excludeInstitutional: boolean;
+  onExcludeInstitutionalChange: (value: boolean) => void;
 }
 
 interface MultiSelectFilterProps {
@@ -117,17 +121,33 @@ export function ProviderFilters({
   onClearAll,
   totalCount,
   filteredCount,
+  excludeInstitutional,
+  onExcludeInstitutionalChange,
 }: ProviderFiltersProps) {
   const hasActiveFilters = 
     selectedStates.length > 0 || 
-    selectedSpecialties.length > 0;
+    selectedSpecialties.length > 0 ||
+    !excludeInstitutional;
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
           <span>Filters:</span>
+        </div>
+        
+        {/* Institutional toggle */}
+        <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+          <Switch
+            id="exclude-institutional"
+            checked={excludeInstitutional}
+            onCheckedChange={onExcludeInstitutionalChange}
+          />
+          <Label htmlFor="exclude-institutional" className="text-sm cursor-pointer">
+            Exclude institutional
+          </Label>
+          <span className="text-xs text-muted-foreground">(labs, pharmacies, ambulance, etc.)</span>
         </div>
         
         <MultiSelectFilter
