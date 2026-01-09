@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import outlierGovLogo from '@/assets/OutlierGOV.png';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -44,9 +45,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Sidebar */}
         <aside className="hidden w-64 flex-col bg-sidebar lg:flex">
           <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
-              <span className="text-lg font-bold text-sidebar-primary-foreground">O</span>
-            </div>
+            <img 
+              src={outlierGovLogo} 
+              alt="OutlierGov" 
+              className="h-8 w-8 object-contain"
+            />
             <span className="text-lg font-semibold text-sidebar-foreground">OutlierGov</span>
           </div>
 
@@ -117,9 +120,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex flex-1 flex-col">
           <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:hidden">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-lg font-bold text-primary-foreground">O</span>
-              </div>
+              <img 
+                src={outlierGovLogo} 
+                alt="OutlierGov" 
+                className="h-8 w-8 object-contain"
+              />
               <span className="text-lg font-semibold">OutlierGov</span>
             </div>
             <Button variant="ghost" size="sm" onClick={signOut}>
