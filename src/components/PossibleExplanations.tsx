@@ -34,7 +34,7 @@ export function PossibleExplanations() {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Lightbulb className="h-5 w-5 text-amber-500" />
-          Possible Explanations for High Percentile Rank
+          Possible Explanations for Top 0.5% Verification
         </CardTitle>
         <CardDescription>
           Many legitimate factors can result in higher-than-average billing amounts. 

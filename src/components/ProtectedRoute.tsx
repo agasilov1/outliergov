@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -11,8 +12,43 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
   const { user, loading, isAdmin } = useAuth();
   const location = useLocation();
+  const [checkingExpired, setCheckingExpired] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    async function checkExpiredStatus() {
+      if (!user) {
+        setCheckingExpired(false);
+        return;
+      }
+
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('expired')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error checking expired status:', error);
+          setCheckingExpired(false);
+          return;
+        }
+
+        setIsExpired(profile?.expired === true);
+      } catch (err) {
+        console.error('Error checking expired status:', err);
+      } finally {
+        setCheckingExpired(false);
+      }
+    }
+
+    if (!loading) {
+      checkExpiredStatus();
+    }
+  }, [user, loading]);
+
+  if (loading || checkingExpired) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -22,6 +58,10 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
 
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  if (isExpired) {
+    return <Navigate to="/expired" replace />;
   }
 
   if (requireAdmin && !isAdmin) {

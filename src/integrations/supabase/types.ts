@@ -503,6 +503,8 @@ export type Database = {
         Row: {
           created_at: string | null
           email: string | null
+          expired: boolean | null
+          expired_reason: string | null
           firm_id: string | null
           full_name: string | null
           id: string
@@ -511,6 +513,8 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email?: string | null
+          expired?: boolean | null
+          expired_reason?: string | null
           firm_id?: string | null
           full_name?: string | null
           id: string
@@ -519,6 +523,8 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string | null
+          expired?: boolean | null
+          expired_reason?: string | null
           firm_id?: string | null
           full_name?: string | null
           id?: string

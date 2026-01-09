@@ -15,7 +15,7 @@ export default function Methodology() {
         <CardHeader>
           <CardTitle>Anomaly Detection Rule</CardTitle>
           <CardDescription>
-            Version 1.1 — Two-tier classification system for identifying statistical outliers
+            Version 1.1 — Verified statistical outlier identification
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -38,7 +38,7 @@ export default function Methodology() {
           <div>
             <h3 className="mb-2 font-semibold">Flagging Threshold</h3>
             <p className="text-muted-foreground">
-              A provider is flagged if their metric is at or above the <Badge className="bg-destructive text-destructive-foreground">99.0th percentile</Badge> of 
+              A provider is flagged if their metric is at or above the <Badge className="bg-destructive text-destructive-foreground">Top 0.5% (≥99.5th percentile)</Badge> of 
               their peer group for <strong>2 consecutive years</strong> in the analysis window.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -48,25 +48,10 @@ export default function Methodology() {
           </div>
 
           <div className="rounded-lg border bg-muted/50 p-4">
-            <h4 className="mb-3 font-medium">Two-Tier Classification System</h4>
-            
-            <div className="space-y-4">
-              <div className="flex gap-3">
-                <Badge variant="destructive" className="shrink-0 mt-0.5">High Confidence</Badge>
-                <div className="text-sm text-muted-foreground">
-                  <p><strong>Criteria:</strong> ≥99.0th percentile for 2 consecutive years, with peer group size ≥20 providers.</p>
-                  <p className="mt-1">These are statistically robust findings suitable for detailed review and investigation.</p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <Badge variant="outline" className="shrink-0 mt-0.5 text-amber-600 border-amber-600">Low Confidence</Badge>
-                <div className="text-sm text-muted-foreground">
-                  <p><strong>Criteria:</strong> ≥99.0th percentile for 2 consecutive years, but peer group size &lt;20 providers.</p>
-                  <p className="mt-1">These are investigative leads only. Small peer group sizes limit statistical significance and require additional verification before drawing any conclusions.</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              <strong>All providers shown met minimum statistical validity thresholds.</strong> Rankings are by 
+              total Medicare billing volume among verified outliers, not by percentile rank.
+            </p>
           </div>
 
           <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">

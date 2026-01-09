@@ -9,6 +9,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { BarChart3, TrendingUp, Loader2, CheckCircle2 } from 'lucide-react';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 import { ProviderFilters } from '@/components/ProviderFilters';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface AnomalyOffline {
   id: string;
@@ -34,6 +43,8 @@ interface AggregatedProvider {
   rank: number;
 }
 
+const ITEMS_PER_PAGE = 100;
+
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
   const navigate = useNavigate();
@@ -41,14 +52,18 @@ export default function Dashboard() {
   // Filter state
   const [stateFilter, setStateFilter] = useState<string[]>([]);
   const [specialtyFilter, setSpecialtyFilter] = useState<string[]>([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch ALL data from anomalies_offline
+  // Fetch ALL data from anomalies_offline (increased limit to get all ~12k rows)
   const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
     queryKey: ['anomalies-offline'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('anomalies_offline')
-        .select('*');
+        .select('*')
+        .limit(15000);
       
       if (error) throw error;
       return data as AnomalyOffline[];
@@ -129,6 +144,18 @@ export default function Dashboard() {
     });
   }, [rankedProviders, stateFilter, specialtyFilter]);
 
+  // Pagination
+  const totalPages = Math.ceil(filteredProviders.length / ITEMS_PER_PAGE);
+  const paginatedProviders = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProviders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProviders, currentPage]);
+
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [stateFilter, specialtyFilter]);
+
   // Derive unique years from anomalies_offline
   const uniqueYears = useMemo(() => {
     if (!anomaliesOffline || anomaliesOffline.length === 0) return [];
@@ -170,6 +197,23 @@ export default function Dashboard() {
   const handleClearAllFilters = () => {
     setStateFilter([]);
     setSpecialtyFilter([]);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | 'ellipsis')[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('ellipsis');
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) pages.push('ellipsis');
+      pages.push(totalPages);
+    }
+    return pages;
   };
 
   return (
@@ -297,70 +341,117 @@ export default function Dashboard() {
                 : 'No providers match the current filters.'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">Rank</TableHead>
-                    <TableHead>Provider Name</TableHead>
-                    <TableHead>NPI</TableHead>
-                    <TableHead>Specialty</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead className="text-right">Max Allowed Amount</TableHead>
-                    {uniqueYears.map(year => (
-                      <TableHead key={year} className="text-center">{year}</TableHead>
+            <>
+              {/* Pagination info */}
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredProviders.length)} of {filteredProviders.length.toLocaleString()} verified outliers
+                </span>
+                <span>Page {currentPage} of {totalPages}</span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Rank</TableHead>
+                      <TableHead>Provider Name</TableHead>
+                      <TableHead>NPI</TableHead>
+                      <TableHead>Specialty</TableHead>
+                      <TableHead>State</TableHead>
+                      <TableHead className="text-right">Max Allowed Amount</TableHead>
+                      {uniqueYears.map(year => (
+                        <TableHead key={year} className="text-center">{year}</TableHead>
+                      ))}
+                      <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedProviders.map((provider) => {
+                      return (
+                        <TableRow
+                          key={provider.npi}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleRowClick(provider.npi, provider.rank, rankedProviders.length)}
+                        >
+                          <TableCell className="font-mono font-semibold text-muted-foreground">
+                            #{provider.rank}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {getProviderDisplayName(provider)}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {provider.npi}
+                          </TableCell>
+                          <TableCell>{provider.specialty}</TableCell>
+                          <TableCell>{provider.state}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {formatCurrency(provider.maxAllowedAmount)}
+                          </TableCell>
+                          {uniqueYears.map(year => {
+                            const yearData = provider.years.find(y => y.year === year);
+                            const isVerified = yearData && yearData.percentile_rank >= 0.995;
+                            return (
+                              <TableCell key={year} className="text-center">
+                                {isVerified ? (
+                                  <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
+                                ) : yearData ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-center">
+                            <Badge variant="destructive" className="font-mono">
+                              ✓ Verified
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                    
+                    {getPageNumbers().map((page, idx) => (
+                      <PaginationItem key={idx}>
+                        {page === 'ellipsis' ? (
+                          <PaginationEllipsis />
+                        ) : (
+                          <PaginationLink
+                            onClick={() => setCurrentPage(page)}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        )}
+                      </PaginationItem>
                     ))}
-                    <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProviders.map((provider) => {
-                    return (
-                      <TableRow
-                        key={provider.npi}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => handleRowClick(provider.npi, provider.rank, rankedProviders.length)}
-                      >
-                        <TableCell className="font-mono font-semibold text-muted-foreground">
-                          #{provider.rank}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {getProviderDisplayName(provider)}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {provider.npi}
-                        </TableCell>
-                        <TableCell>{provider.specialty}</TableCell>
-                        <TableCell>{provider.state}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatCurrency(provider.maxAllowedAmount)}
-                        </TableCell>
-                        {uniqueYears.map(year => {
-                          const yearData = provider.years.find(y => y.year === year);
-                          const isVerified = yearData && yearData.percentile_rank >= 0.995;
-                          return (
-                            <TableCell key={year} className="text-center">
-                              {isVerified ? (
-                                <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
-                              ) : yearData ? (
-                                <span className="text-muted-foreground">-</span>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                          );
-                        })}
-                        <TableCell className="text-center">
-                          <Badge variant="destructive" className="font-mono">
-                            ✓ Verified
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

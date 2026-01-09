@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck } from 'lucide-react';
 
 interface Invitation {
   id: string;
@@ -29,11 +29,13 @@ interface User {
   firm_name: string | null;
   created_at: string;
   last_sign_in_at: string | null;
+  expired?: boolean;
 }
 
 interface Firm {
   id: string;
   name: string;
+  created_at?: string;
 }
 
 interface ComputeRun {
@@ -65,7 +67,6 @@ export default function Admin() {
     providers: number;
     flagged: number;
     peerGroups: number;
-    suppressed: number;
     computeRunId: string | null;
   } | null>(null);
   const [computeRuns, setComputeRuns] = useState<ComputeRun[]>([]);
@@ -79,6 +80,13 @@ export default function Admin() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [linkExpiry, setLinkExpiry] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Create firm state
+  const [newFirmName, setNewFirmName] = useState('');
+  const [createFirmLoading, setCreateFirmLoading] = useState(false);
+
+  // User expiration state
+  const [expiringUserId, setExpiringUserId] = useState<string | null>(null);
 
   // Data state
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -95,7 +103,7 @@ export default function Admin() {
     
     setLoadingData(true);
     try {
-      const { data: firmsData } = await supabase.from('firms').select('id, name').order('name');
+      const { data: firmsData } = await supabase.from('firms').select('id, name, created_at').order('name');
       setFirms(firmsData || []);
 
       const { data: invitationsData } = await supabase.from('invitations').select('*').order('created_at', { ascending: false });
@@ -153,6 +161,49 @@ export default function Admin() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleCreateFirm() {
+    if (!newFirmName.trim()) {
+      toast.error('Please enter a firm name');
+      return;
+    }
+
+    setCreateFirmLoading(true);
+    try {
+      const { error } = await supabase.from('firms').insert({ name: newFirmName.trim() });
+      if (error) throw error;
+      toast.success('Firm created successfully!');
+      setNewFirmName('');
+      loadData();
+    } catch (error) {
+      console.error('Error creating firm:', error);
+      toast.error('Failed to create firm');
+    } finally {
+      setCreateFirmLoading(false);
+    }
+  }
+
+  async function handleToggleExpired(userId: string, currentExpired: boolean) {
+    setExpiringUserId(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          expired: !currentExpired,
+          expired_reason: !currentExpired ? 'Account expired by admin' : null
+        })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      toast.success(currentExpired ? 'User access restored' : 'User access expired');
+      loadData();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user status');
+    } finally {
+      setExpiringUserId(null);
+    }
+  }
+
   async function handleRecomputeAnomalies() {
     setRecomputeLoading(true);
     try {
@@ -163,10 +214,9 @@ export default function Admin() {
         providers: data.results?.providers_analyzed || 0,
         flagged: data.results?.providers_flagged || 0,
         peerGroups: data.results?.peer_groups_analyzed || 0,
-        suppressed: data.results?.providers_suppressed_low_sample || 0,
         computeRunId: data.compute_run_id
       });
-      toast.success(`Flagged ${data.results?.providers_flagged || 0} providers (high confidence)`);
+      toast.success(`Flagged ${data.results?.providers_flagged || 0} providers`);
       loadData();
     } catch (error) {
       console.error('Error:', error);
@@ -235,162 +285,80 @@ export default function Admin() {
 
       {activeSection === 'users' && (
         <Card>
-          <CardHeader><CardTitle>All Users</CardTitle></CardHeader>
-          <CardContent>{loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : <Table><TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Roles</TableHead><TableHead>Firm</TableHead><TableHead>Joined</TableHead></TableRow></TableHeader><TableBody>{users.map(u => <TableRow key={u.id}><TableCell><div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{u.email}</div></TableCell><TableCell><div className="flex gap-1">{u.roles.map(r => <Badge key={r} variant={r === 'admin' ? 'default' : 'secondary'}>{r}</Badge>)}</div></TableCell><TableCell>{u.firm_name || '—'}</TableCell><TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell></TableRow>)}</TableBody></Table>}</CardContent>
+          <CardHeader><CardTitle>All Users</CardTitle><CardDescription>Manage user access. Expired users cannot access the platform.</CardDescription></CardHeader>
+          <CardContent>{loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : <Table><TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Roles</TableHead><TableHead>Firm</TableHead><TableHead>Status</TableHead><TableHead>Joined</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{users.map(u => <TableRow key={u.id} className={u.expired ? 'opacity-60' : ''}><TableCell><div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{u.email}</div></TableCell><TableCell><div className="flex gap-1">{u.roles.map(r => <Badge key={r} variant={r === 'admin' ? 'default' : 'secondary'}>{r}</Badge>)}</div></TableCell><TableCell>{u.firm_name || '—'}</TableCell><TableCell>{u.expired ? <Badge variant="outline" className="text-amber-600 border-amber-600">Expired</Badge> : <Badge variant="outline" className="text-green-600 border-green-600">Active</Badge>}</TableCell><TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell><TableCell className="text-right"><Button variant={u.expired ? 'outline' : 'destructive'} size="sm" onClick={() => handleToggleExpired(u.id, u.expired || false)} disabled={expiringUserId === u.id}>{expiringUserId === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : u.expired ? <><UserCheck className="h-4 w-4 mr-1" />Restore</> : <><UserX className="h-4 w-4 mr-1" />Expire</>}</Button></TableCell></TableRow>)}</TableBody></Table>}</CardContent>
         </Card>
       )}
 
-      {activeSection === 'data' && (
-        <div className="space-y-6">
-          {/* Active Dataset Info */}
-          {activeDataset && (
-            <Card className={isSyntheticDataset(activeDataset) ? "border-amber-500/50" : "border-green-500/50"}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5" />
-                  Active Dataset
-                  {isSyntheticDataset(activeDataset) ? (
-                    <Badge variant="outline" className="text-amber-600 border-amber-600">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      Demo / Synthetic
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-green-600 border-green-600">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Production
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>Current dataset being used for analysis</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Dataset</p>
-                    <p className="font-medium">{activeDataset.release_label}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Ingested</p>
-                    <p className="font-medium">{activeDataset.ingested_at ? formatDate(activeDataset.ingested_at) : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Source</p>
-                    <p className="font-medium">{isSyntheticDataset(activeDataset) ? 'Synthetic Data Generator' : 'CMS Public Use Files'}</p>
-                  </div>
-                </div>
-                {isSyntheticDataset(activeDataset) && (
-                  <div className="mt-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-                      <p className="text-sm text-amber-700">
-                        <strong>Warning:</strong> The platform is currently using synthetic demo data. 
-                        Ingest real CMS data for production use.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
+      {activeSection === 'firms' && (
+        <div className="grid gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Recompute Anomalies</CardTitle>
-              <CardDescription>Run anomaly detection on current data using the 99.0th percentile threshold</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Create New Firm</CardTitle><CardDescription>Add a new firm to the platform.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={handleRecomputeAnomalies} disabled={recomputeLoading} className="w-full">
-                {recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Recompute Anomalies
+              <div className="space-y-2">
+                <Label>Firm Name</Label>
+                <Input placeholder="Enter firm name..." value={newFirmName} onChange={e => setNewFirmName(e.target.value)} />
+              </div>
+              <Button onClick={handleCreateFirm} disabled={createFirmLoading} className="w-full">
+                {createFirmLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                Create Firm
               </Button>
-              {lastComputeStats && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                  <p><strong>Last Run:</strong></p>
-                  <p>Providers analyzed: {lastComputeStats.providers.toLocaleString()}</p>
-                  <p>Peer groups: {lastComputeStats.peerGroups}</p>
-                  <p>High confidence flags: {lastComputeStats.flagged}</p>
-                  <p>Low confidence (suppressed): {lastComputeStats.suppressed}</p>
-                </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Existing Firms</CardTitle></CardHeader>
+            <CardContent>
+              {loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : firms.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-8">No firms created yet</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {firms.map(f => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{f.created_at ? formatDate(f.created_at) : '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Dataset Releases</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Label</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ingested</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {datasetReleases.map(r => (
-                    <TableRow key={r.id} className={r.status === 'active' ? 'bg-muted/30' : ''}>
-                      <TableCell className="font-medium">{r.release_label}</TableCell>
-                      <TableCell>
-                        {isSyntheticDataset(r) ? (
-                          <Badge variant="outline" className="text-amber-600 border-amber-600">Demo</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-green-600 border-green-600">CMS</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {r.ingested_at ? formatDate(r.ingested_at) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Compute History</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Version</TableHead>
-                    <TableHead>Started</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {computeRuns.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.run_type}</TableCell>
-                      <TableCell>
-                        {r.status === 'success' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : r.status === 'failed' ? (
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        ) : (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{r.rule_set_version}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {r.started_at ? formatDate(r.started_at) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {activeSection === 'firms' && <Card><CardHeader><CardTitle>Firm Management</CardTitle></CardHeader><CardContent><p className="py-8 text-center text-sm text-muted-foreground">Coming soon</p></CardContent></Card>}
+      {activeSection === 'data' && (
+        <div className="space-y-6">
+          {activeDataset && (
+            <Card className={isSyntheticDataset(activeDataset) ? "border-amber-500/50" : "border-green-500/50"}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5" />Active Dataset
+                  {isSyntheticDataset(activeDataset) ? <Badge variant="outline" className="text-amber-600 border-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Demo / Synthetic</Badge> : <Badge variant="outline" className="text-green-600 border-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Production</Badge>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div><p className="text-sm text-muted-foreground">Dataset</p><p className="font-medium">{activeDataset.release_label}</p></div>
+                  <div><p className="text-sm text-muted-foreground">Ingested</p><p className="font-medium">{activeDataset.ingested_at ? formatDate(activeDataset.ingested_at) : '—'}</p></div>
+                  <div><p className="text-sm text-muted-foreground">Source</p><p className="font-medium">{isSyntheticDataset(activeDataset) ? 'Synthetic Data Generator' : 'CMS Public Use Files'}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader><CardTitle>Recompute Anomalies</CardTitle><CardDescription>Run anomaly detection on current data using the Top 0.5% threshold</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <Button onClick={handleRecomputeAnomalies} disabled={recomputeLoading} className="w-full">{recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}<RefreshCw className="mr-2 h-4 w-4" />Recompute Anomalies</Button>
+              {lastComputeStats && <div className="rounded-lg border bg-muted/50 p-3 text-sm"><p><strong>Last Run:</strong></p><p>Providers analyzed: {lastComputeStats.providers.toLocaleString()}</p><p>Peer groups: {lastComputeStats.peerGroups}</p><p>Providers flagged: {lastComputeStats.flagged}</p></div>}
+            </CardContent>
+          </Card>
+          <Card><CardHeader><CardTitle>Dataset Releases</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Label</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Ingested</TableHead></TableRow></TableHeader><TableBody>{datasetReleases.map(r => <TableRow key={r.id} className={r.status === 'active' ? 'bg-muted/30' : ''}><TableCell className="font-medium">{r.release_label}</TableCell><TableCell>{isSyntheticDataset(r) ? <Badge variant="outline" className="text-amber-600 border-amber-600">Demo</Badge> : <Badge variant="outline" className="text-green-600 border-green-600">CMS</Badge>}</TableCell><TableCell><Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge></TableCell><TableCell className="text-sm text-muted-foreground">{r.ingested_at ? formatDate(r.ingested_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+          <Card><CardHeader><CardTitle>Compute History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Version</TableHead><TableHead>Started</TableHead></TableRow></TableHeader><TableBody>{computeRuns.map(r => <TableRow key={r.id}><TableCell>{r.run_type}</TableCell><TableCell>{r.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : r.status === 'failed' ? <XCircle className="h-4 w-4 text-destructive" /> : <Loader2 className="h-4 w-4 animate-spin" />}</TableCell><TableCell className="font-mono text-xs">{r.rule_set_version}</TableCell><TableCell className="text-sm text-muted-foreground">{r.started_at ? formatDate(r.started_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+        </div>
+      )}
+
       {activeSection === 'audit' && <Card><CardHeader><CardTitle>Audit Logs</CardTitle></CardHeader><CardContent><p className="py-8 text-center text-sm text-muted-foreground">Coming soon</p></CardContent></Card>}
 
       <Card><CardHeader><CardTitle>Current Admin</CardTitle></CardHeader><CardContent><div className="space-y-2"><div className="flex items-center gap-2"><span className="text-sm font-medium">Email:</span><span className="text-sm text-muted-foreground">{user?.email}</span></div><div className="flex items-center gap-2"><span className="text-sm font-medium">User ID:</span><code className="rounded bg-muted px-2 py-1 text-xs">{user?.id}</code></div></div></CardContent></Card>
