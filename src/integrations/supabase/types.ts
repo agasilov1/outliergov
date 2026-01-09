@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      anomalies_offline: {
+        Row: {
+          beneficiary_count: number | null
+          created_at: string | null
+          id: string
+          npi: string
+          percentile_rank: number | null
+          provider_name: string | null
+          service_count: number | null
+          specialty: string | null
+          state: string | null
+          total_allowed_amount: number | null
+          year: number
+        }
+        Insert: {
+          beneficiary_count?: number | null
+          created_at?: string | null
+          id?: string
+          npi: string
+          percentile_rank?: number | null
+          provider_name?: string | null
+          service_count?: number | null
+          specialty?: string | null
+          state?: string | null
+          total_allowed_amount?: number | null
+          year: number
+        }
+        Update: {
+          beneficiary_count?: number | null
+          created_at?: string | null
+          id?: string
+          npi?: string
+          percentile_rank?: number | null
+          provider_name?: string | null
+          service_count?: number | null
+          specialty?: string | null
+          state?: string | null
+          total_allowed_amount?: number | null
+          year?: number
+        }
+        Relationships: []
+      }
       anomaly_flag_years: {
         Row: {
           anomaly_flag_id: string
