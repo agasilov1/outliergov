@@ -49,11 +49,13 @@ const ITEMS_PER_PAGE = 100;
 const INSTITUTIONAL_SPECIALTIES = [
   'pharmacy',
   'centralized flu',
-  'portable xray supplier',
+  'portable x-ray supplier',
   'clinical laboratory',
   'idtf',
   'ambulance service',
-  'ambulatory surgical'
+  'ambulatory surgical',
+  'all other suppliers',
+  'unknown supplier/provider specialty'
 ];
 
 export default function Dashboard() {
