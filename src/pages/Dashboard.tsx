@@ -7,57 +7,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart3, Users, TrendingUp, Loader2, Info } from 'lucide-react';
-import { DataLineagePanel } from '@/components/DataLineagePanel';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 import { ProviderFilters, ConfidenceLevel } from '@/components/ProviderFilters';
 import { ConfidenceBadge, getConfidenceLevel } from '@/components/ConfidenceBadge';
 
-interface AnomalyFlagV2 {
+interface AnomalyOffline {
   id: string;
-  provider_id: string;
-  normalized_specialty: string;
-  normalized_state: string;
-  flagged: boolean;
-  flag_reason: string | null;
-  metric_name: string;
-  rule_set_version: string;
-  providers: {
-    id: string;
-    npi: string;
-    provider_name: string;
-  };
-  anomaly_flag_years: {
-    year: number;
-    percentile_rank: number;
-    peer_size: number;
-    value: number;
-    p995_threshold: number;
-  }[];
+  npi: string;
+  provider_name: string | null;
+  specialty: string | null;
+  state: string | null;
+  year: number;
+  percentile_rank: number | null;
+  total_allowed_amount: number | null;
+  beneficiary_count: number | null;
+  service_count: number | null;
 }
 
-interface RankedProvider extends AnomalyFlagV2 {
+interface AggregatedProvider {
+  npi: string;
+  provider_name: string;
+  specialty: string;
+  state: string;
+  years: { year: number; percentile_rank: number; total_allowed_amount: number }[];
   maxPercentile: number;
   minPeerSize: number;
   yearsAboveThreshold: number;
   confidence: ConfidenceLevel;
   rank: number;
-}
-
-interface DatasetRelease {
-  id: string;
-  release_label: string;
-  dataset_key: string;
-  status: string;
-  ingested_at: string | null;
-  source_url: string | null;
-}
-
-interface ComputeRun {
-  id: string;
-  rule_set_version: string;
-  status: string;
-  finished_at: string | null;
-  parameters_json: Record<string, unknown>;
 }
 
 export default function Dashboard() {
@@ -70,147 +47,86 @@ export default function Dashboard() {
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceLevel[]>([]);
   const [minPeerSizeFilter, setMinPeerSizeFilter] = useState(0);
 
-  // Fetch active dataset release
-  const { data: datasetRelease, isLoading: releaseLoading } = useQuery({
-    queryKey: ['active-dataset-release'],
+  // Fetch ALL data from anomalies_offline
+  const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
+    queryKey: ['anomalies-offline'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('dataset_releases')
-        .select('*')
-        .eq('status', 'active')
-        .order('ingested_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .from('anomalies_offline')
+        .select('*');
       
       if (error) throw error;
-      return data as DatasetRelease | null;
+      return data as AnomalyOffline[];
     }
   });
 
-  // Fetch latest compute run
-  const { data: computeRun } = useQuery({
-    queryKey: ['latest-compute-run', datasetRelease?.id],
-    queryFn: async () => {
-      if (!datasetRelease) return null;
-      const { data, error } = await supabase
-        .from('compute_runs')
-        .select('*')
-        .eq('dataset_release_id', datasetRelease.id)
-        .eq('run_type', 'anomaly_flags_v2')
-        .eq('status', 'success')
-        .order('finished_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data as ComputeRun | null;
-    },
-    enabled: !!datasetRelease
-  });
-
-  // Fetch ALL providers with anomaly data
-  const { data: allProviders, isLoading: providersLoading } = useQuery({
-    queryKey: ['all-anomaly-providers'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('anomaly_flags_v2')
-        .select(`
-          id,
-          provider_id,
-          normalized_specialty,
-          normalized_state,
-          flagged,
-          flag_reason,
-          metric_name,
-          rule_set_version,
-          providers (
-            id,
-            npi,
-            provider_name
-          ),
-          anomaly_flag_years (
-            year,
-            percentile_rank,
-            peer_size,
-            value,
-            p995_threshold
-          )
-        `);
-      
-      if (error) throw error;
-      return data as AnomalyFlagV2[];
-    }
-  });
-
-  // Fetch total providers count
-  const { data: totalProvidersInDb } = useQuery({
-    queryKey: ['total-providers'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('providers')
-        .select('*', { count: 'exact', head: true });
-      
-      if (error) throw error;
-      return count || 0;
-    }
-  });
-
-  // Compute ranked providers with MAX percentile (worst-case anomalousness)
+  // Aggregate providers from anomalies_offline
   const rankedProviders = useMemo(() => {
-    if (!allProviders) return [];
+    if (!anomaliesOffline || anomaliesOffline.length === 0) return [];
     
-    const withRankingData = allProviders.map(provider => {
-      const years = provider.anomaly_flag_years || [];
-      
-      // MAX percentile = worst-case anomalousness (higher = more anomalous)
-      const maxPercentile = years.length > 0 
-        ? Math.max(...years.map(y => y.percentile_rank)) 
+    // Group by NPI
+    const grouped = anomaliesOffline.reduce((acc, row) => {
+      if (!acc[row.npi]) {
+        acc[row.npi] = {
+          npi: row.npi,
+          provider_name: row.provider_name || `Provider NPI ${row.npi}`,
+          specialty: row.specialty || 'Unknown',
+          state: row.state || 'Unknown',
+          years: []
+        };
+      }
+      acc[row.npi].years.push({
+        year: row.year,
+        percentile_rank: Number(row.percentile_rank) || 0,
+        total_allowed_amount: Number(row.total_allowed_amount) || 0
+      });
+      return acc;
+    }, {} as Record<string, { npi: string; provider_name: string; specialty: string; state: string; years: { year: number; percentile_rank: number; total_allowed_amount: number }[] }>);
+    
+    // Convert to array and calculate metrics
+    const providers: AggregatedProvider[] = Object.values(grouped).map((p) => {
+      const maxPercentile = p.years.length > 0 
+        ? Math.max(...p.years.map(y => y.percentile_rank)) 
         : 0;
       
-      // MIN peer size for confidence calculation
-      const minPeerSize = years.length > 0 
-        ? Math.min(...years.map(y => y.peer_size)) 
-        : 0;
+      // Count years where percentile >= 0.995 (99.5th)
+      const yearsAboveThreshold = p.years.filter(y => y.percentile_rank >= 0.995).length;
       
-      // Years count for display only
-      const yearsAboveThreshold = years.length;
-      
-      // Compute confidence level (UI only, based on peer size)
+      // We don't have peer_size in anomalies_offline, so assume high confidence (peer size >= 20)
+      const minPeerSize = 20;
       const confidence = getConfidenceLevel(minPeerSize);
       
       return {
-        ...provider,
+        ...p,
         maxPercentile,
         minPeerSize,
         yearsAboveThreshold,
         confidence,
-        rank: 0 // Will be set after sorting
+        rank: 0
       };
     });
     
-    // Sort: MAX percentile DESC (primary), years DESC (secondary), peer size DESC (tertiary)
-    const sorted = withRankingData.sort((a, b) => {
+    // Sort by max percentile DESC
+    providers.sort((a, b) => {
       if (b.maxPercentile !== a.maxPercentile) 
         return b.maxPercentile - a.maxPercentile;
-      if (b.yearsAboveThreshold !== a.yearsAboveThreshold) 
-        return b.yearsAboveThreshold - a.yearsAboveThreshold;
-      return b.minPeerSize - a.minPeerSize;
+      return b.yearsAboveThreshold - a.yearsAboveThreshold;
     });
     
     // Assign ranks
-    sorted.forEach((p, index) => {
+    providers.forEach((p, index) => {
       p.rank = index + 1;
     });
     
-    return sorted as RankedProvider[];
-  }, [allProviders]);
+    return providers;
+  }, [anomaliesOffline]);
 
   // Get unique filter options
   const filterOptions = useMemo(() => {
     if (!rankedProviders) return { states: [], specialties: [] };
     
-    const states = [...new Set(rankedProviders.map(p => p.normalized_state))].sort();
-    const specialties = [...new Set(rankedProviders.map(p => p.normalized_specialty))].sort();
+    const states = [...new Set(rankedProviders.map(p => p.state))].sort();
+    const specialties = [...new Set(rankedProviders.map(p => p.specialty))].sort();
     
     return { states, specialties };
   }, [rankedProviders]);
@@ -218,23 +134,19 @@ export default function Dashboard() {
   // Apply filters
   const filteredProviders = useMemo(() => {
     return rankedProviders.filter(p => {
-      if (stateFilter.length > 0 && !stateFilter.includes(p.normalized_state)) return false;
-      if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.normalized_specialty)) return false;
+      if (stateFilter.length > 0 && !stateFilter.includes(p.state)) return false;
+      if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.specialty)) return false;
       if (confidenceFilter.length > 0 && !confidenceFilter.includes(p.confidence)) return false;
       if (p.minPeerSize < minPeerSizeFilter) return false;
       return true;
     });
   }, [rankedProviders, stateFilter, specialtyFilter, confidenceFilter, minPeerSizeFilter]);
 
-  // Derive unique years from all providers data
+  // Derive unique years from anomalies_offline
   const uniqueYears = useMemo(() => {
-    if (!allProviders || allProviders.length === 0) return [];
-    const years = new Set<number>();
-    allProviders.forEach(fp => {
-      fp.anomaly_flag_years?.forEach(fy => years.add(fy.year));
-    });
-    return Array.from(years).sort((a, b) => a - b);
-  }, [allProviders]);
+    if (!anomaliesOffline || anomaliesOffline.length === 0) return [];
+    return [...new Set(anomaliesOffline.map(a => a.year))].sort((a, b) => a - b);
+  }, [anomaliesOffline]);
 
   // Format year range for display
   const yearRangeDisplay = useMemo(() => {
@@ -245,22 +157,28 @@ export default function Dashboard() {
 
   // Stats calculations
   const highConfidenceCount = rankedProviders.filter(p => p.confidence === 'high').length;
+  
+  // Count providers with percentile >= 0.995 in ALL years
+  const anomalyCount = rankedProviders.filter(p => 
+    p.yearsAboveThreshold === uniqueYears.length && uniqueYears.length > 0
+  ).length;
 
   const formatPercentile = (value: number) => {
-    return `${Number(value).toFixed(1)}th`;
+    // Convert from decimal (0.995) to percentage (99.5th)
+    const pct = value * 100;
+    return `${pct.toFixed(1)}th`;
   };
 
-  const handleRowClick = (providerId: string, rank: number, totalCount: number) => {
-    navigate(`/provider/${providerId}?rank=${rank}&total=${totalCount}`);
+  const handleRowClick = (npi: string, rank: number, totalCount: number) => {
+    navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}`);
   };
 
-  const getPercentileForYear = (flag: RankedProvider, year: number) => {
-    const yearData = flag.anomaly_flag_years?.find(y => y.year === year);
+  const getPercentileForYear = (provider: AggregatedProvider, year: number) => {
+    const yearData = provider.years.find(y => y.year === year);
     return yearData?.percentile_rank;
   };
 
-  const getProviderDisplayName = (provider: AnomalyFlagV2['providers']) => {
-    if (!provider) return 'Unknown';
+  const getProviderDisplayName = (provider: AggregatedProvider) => {
     if (provider.provider_name === provider.npi) {
       return `Provider NPI ${provider.npi}`;
     }
@@ -285,13 +203,6 @@ export default function Dashboard() {
           Providers ranked by statistical variance from peers. Click a row to view details.
         </p>
       </div>
-
-      {/* Data Lineage Panel */}
-      <DataLineagePanel 
-        datasetRelease={datasetRelease || null} 
-        computeRun={computeRun || null}
-        isLoading={releaseLoading}
-      />
 
       {/* User info card */}
       <Card>
@@ -334,7 +245,22 @@ export default function Dashboard() {
               {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : rankedProviders.length.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Statistical outliers identified
+              Unique providers in dataset
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Anomalies (Both Years)</CardTitle>
+            <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">
+              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : anomalyCount.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              ≥99.5th percentile in all years
             </p>
           </CardContent>
         </Card>
@@ -350,19 +276,6 @@ export default function Dashboard() {
             </div>
             <p className="text-xs text-muted-foreground">
               Peer group size ≥ 20
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Providers in DB</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalProvidersInDb?.toLocaleString() || '--'}</div>
-            <p className="text-xs text-muted-foreground">
-              Full dataset
             </p>
           </CardContent>
         </Card>
@@ -419,7 +332,7 @@ export default function Dashboard() {
           ) : filteredProviders.length === 0 ? (
             <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
               {rankedProviders.length === 0 
-                ? 'No statistical outliers found. Run anomaly computation from the Admin panel.'
+                ? 'No data found in anomalies_offline table.'
                 : 'No providers match the current filters.'}
             </div>
           ) : (
@@ -446,21 +359,21 @@ export default function Dashboard() {
 
                     return (
                       <TableRow
-                        key={provider.id}
+                        key={provider.npi}
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => handleRowClick(provider.provider_id, provider.rank, rankedProviders.length)}
+                        onClick={() => handleRowClick(provider.npi, provider.rank, rankedProviders.length)}
                       >
                         <TableCell className="font-mono font-semibold text-muted-foreground">
                           #{provider.rank}
                         </TableCell>
                         <TableCell className="font-medium">
-                          {getProviderDisplayName(provider.providers)}
+                          {getProviderDisplayName(provider)}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {provider.providers?.npi || '-'}
+                          {provider.npi}
                         </TableCell>
-                        <TableCell>{provider.normalized_specialty}</TableCell>
-                        <TableCell>{provider.normalized_state}</TableCell>
+                        <TableCell>{provider.specialty}</TableCell>
+                        <TableCell>{provider.state}</TableCell>
                         {uniqueYears.map(year => {
                           const percentile = getPercentileForYear(provider, year);
                           return (
