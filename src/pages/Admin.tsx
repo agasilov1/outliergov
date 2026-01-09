@@ -8,18 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Clock, Mail, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck } from 'lucide-react';
-
-interface Invitation {
-  id: string;
-  email: string;
-  role: string;
-  firm_id: string | null;
-  created_at: string;
-  expires_at: string;
-  accepted_at: string | null;
-}
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 interface User {
   id: string;
@@ -59,7 +50,7 @@ interface DatasetRelease {
 
 export default function Admin() {
   const { user, session } = useAuth();
-  const [activeSection, setActiveSection] = useState<'invite' | 'users' | 'firms' | 'data' | 'audit'>('invite');
+  const [activeSection, setActiveSection] = useState<'users' | 'firms' | 'data' | 'audit'>('users');
   
   // Data management state
   const [recomputeLoading, setRecomputeLoading] = useState(false);
@@ -72,14 +63,19 @@ export default function Admin() {
   const [computeRuns, setComputeRuns] = useState<ComputeRun[]>([]);
   const [datasetReleases, setDatasetReleases] = useState<DatasetRelease[]>([]);
   
-  // Invite form state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'firm_user'>('firm_user');
-  const [inviteFirmId, setInviteFirmId] = useState<string>('');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [linkExpiry, setLinkExpiry] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Create user form state
+  const [createUserEmail, setCreateUserEmail] = useState('');
+  const [createUserName, setCreateUserName] = useState('');
+  const [createUserRole, setCreateUserRole] = useState<'admin' | 'firm_user'>('firm_user');
+  const [createUserFirmId, setCreateUserFirmId] = useState<string>('');
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  
+  // Generated password modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState('');
+  const [createdUserEmail, setCreatedUserEmail] = useState('');
+  const [passwordCopied, setPasswordCopied] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Create firm state
   const [newFirmName, setNewFirmName] = useState('');
@@ -89,7 +85,6 @@ export default function Admin() {
   const [expiringUserId, setExpiringUserId] = useState<string | null>(null);
 
   // Data state
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -106,9 +101,6 @@ export default function Admin() {
       const { data: firmsData } = await supabase.from('firms').select('id, name, created_at').order('name');
       setFirms(firmsData || []);
 
-      const { data: invitationsData } = await supabase.from('invitations').select('*').order('created_at', { ascending: false });
-      setInvitations(invitationsData || []);
-
       const { data, error } = await supabase.functions.invoke('list-users');
       if (!error) setUsers(data?.users || []);
 
@@ -124,41 +116,58 @@ export default function Admin() {
     }
   }
 
-  async function handleGenerateInvite() {
-    if (!inviteEmail || !inviteEmail.includes('@')) {
+  async function handleCreateUser() {
+    if (!createUserEmail || !createUserEmail.includes('@')) {
       toast.error('Please enter a valid email address');
       return;
     }
-    if (inviteRole === 'firm_user' && !inviteFirmId) {
+    if (createUserRole === 'firm_user' && !createUserFirmId) {
       toast.error('Please select a firm for firm users');
       return;
     }
 
-    setInviteLoading(true);
-    setGeneratedLink(null);
+    setCreateUserLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('generate-invite', {
-        body: { email: inviteEmail, role: inviteRole, firm_id: inviteRole === 'firm_user' ? inviteFirmId : null }
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { 
+          email: createUserEmail, 
+          full_name: createUserName || null,
+          role: createUserRole, 
+          firm_id: createUserRole === 'firm_user' ? createUserFirmId : null 
+        }
       });
-      if (error || data?.error) throw new Error(data?.error || 'Failed');
-      setGeneratedLink(data.invite_url);
-      setLinkExpiry(data.expires_at);
-      toast.success('Invitation link generated!');
+      
+      if (error || data?.error) throw new Error(data?.error || 'Failed to create user');
+      
+      // Show password modal
+      setGeneratedPassword(data.generated_password);
+      setCreatedUserEmail(data.email);
+      setShowPasswordModal(true);
+      setPasswordCopied(false);
+      setShowPassword(false);
+      
+      // Reset form
+      setCreateUserEmail('');
+      setCreateUserName('');
+      setCreateUserRole('firm_user');
+      setCreateUserFirmId('');
+      
+      toast.success('User created successfully!');
       loadData();
-    } catch {
-      toast.error('Failed to generate invitation');
+    } catch (err) {
+      console.error('Error creating user:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to create user');
     } finally {
-      setInviteLoading(false);
+      setCreateUserLoading(false);
     }
   }
 
-  async function handleCopyLink() {
-    if (!generatedLink) return;
-    await navigator.clipboard.writeText(generatedLink);
-    setCopied(true);
-    toast.success('Link copied!');
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopyPassword() {
+    await navigator.clipboard.writeText(generatedPassword);
+    setPasswordCopied(true);
+    toast.success('Password copied to clipboard!');
+    setTimeout(() => setPasswordCopied(false), 3000);
   }
 
   async function handleCreateFirm() {
@@ -227,8 +236,6 @@ export default function Admin() {
   }
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const isExpired = (expiresAt: string) => new Date(expiresAt) < new Date();
-  const pendingInvitations = invitations.filter(i => !i.accepted_at && !isExpired(i.expires_at));
   
   const isSyntheticDataset = (release: DatasetRelease) => {
     return release.dataset_key?.toLowerCase().includes('synthetic') || 
@@ -240,6 +247,74 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
+      {/* Password Display Modal */}
+      <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              User Created Successfully
+            </DialogTitle>
+            <DialogDescription>
+              Share this temporary password with the user. They will be required to change it on first login.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span><strong>Important:</strong> Copy this password now. It will not be shown again.</span>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <div className="rounded-lg bg-muted px-3 py-2 text-sm font-medium">
+                {createdUserEmail}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Temporary Password</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input 
+                    type={showPassword ? 'text' : 'password'}
+                    value={generatedPassword} 
+                    readOnly 
+                    className="font-mono pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={handleCopyPassword}
+                  className={passwordCopied ? 'border-green-500 text-green-500' : ''}
+                >
+                  {passwordCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={() => setShowPasswordModal(false)} 
+              className="w-full"
+              disabled={!passwordCopied}
+            >
+              {passwordCopied ? 'Done' : 'Copy password first to continue'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-3xl font-bold tracking-tight">Admin Panel</h1>
@@ -248,13 +323,12 @@ export default function Admin() {
         <p className="text-muted-foreground">Manage users, firms, and system settings</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {(['invite', 'users', 'firms', 'data', 'audit'] as const).map(section => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {(['users', 'firms', 'data', 'audit'] as const).map(section => (
           <Card key={section} className={`cursor-pointer transition-colors ${activeSection === section ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`} onClick={() => setActiveSection(section)}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                {section === 'invite' && <><UserPlus className="h-5 w-5 text-accent" />Invite Users</>}
-                {section === 'users' && <><Users className="h-5 w-5 text-accent" />All Users ({users.length})</>}
+                {section === 'users' && <><Users className="h-5 w-5 text-accent" />Users ({users.length})</>}
                 {section === 'firms' && <><Building2 className="h-5 w-5 text-accent" />Firms ({firms.length})</>}
                 {section === 'data' && <><Database className="h-5 w-5 text-accent" />Data Management</>}
                 {section === 'audit' && <><FileText className="h-5 w-5 text-accent" />Audit Logs</>}
@@ -264,30 +338,144 @@ export default function Admin() {
         ))}
       </div>
 
-      {activeSection === 'invite' && (
-        <div className="grid gap-6 lg:grid-cols-2">
+      {activeSection === 'users' && (
+        <div className="space-y-6">
+          {/* Create User Form */}
           <Card>
-            <CardHeader><CardTitle>Generate Invitation Link</CardTitle><CardDescription>Create a magic link to invite a new user.</CardDescription></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2"><Label>Email Address</Label><Input type="email" placeholder="user@example.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Role</Label><Select value={inviteRole} onValueChange={v => setInviteRole(v as 'admin' | 'firm_user')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="firm_user">Firm User</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
-              {inviteRole === 'firm_user' && <div className="space-y-2"><Label>Firm</Label><Select value={inviteFirmId} onValueChange={setInviteFirmId}><SelectTrigger><SelectValue placeholder="Select a firm..." /></SelectTrigger><SelectContent>{firms.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}</SelectContent></Select></div>}
-              <Button onClick={handleGenerateInvite} disabled={inviteLoading} className="w-full">{inviteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Generate Invite Link</Button>
-              {generatedLink && <div className="mt-4 space-y-2 rounded-lg border bg-muted/50 p-4"><div className="flex items-center justify-between"><span className="text-sm font-medium">Invitation Link</span><Badge variant="outline" className="text-xs"><Clock className="mr-1 h-3 w-3" />Expires {linkExpiry ? formatDate(linkExpiry) : '7 days'}</Badge></div><div className="flex gap-2"><Input value={generatedLink} readOnly className="font-mono text-xs" /><Button variant="outline" size="icon" onClick={handleCopyLink}>{copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}</Button></div></div>}
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Create New User
+              </CardTitle>
+              <CardDescription>Create a user account with a generated password. The user must change their password on first login.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Email Address</Label>
+                  <Input 
+                    type="email" 
+                    placeholder="user@example.com" 
+                    value={createUserEmail} 
+                    onChange={e => setCreateUserEmail(e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Full Name (optional)</Label>
+                  <Input 
+                    placeholder="John Doe" 
+                    value={createUserName} 
+                    onChange={e => setCreateUserName(e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select value={createUserRole} onValueChange={v => setCreateUserRole(v as 'admin' | 'firm_user')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="firm_user">Firm User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {createUserRole === 'firm_user' && (
+                  <div className="space-y-2">
+                    <Label>Firm</Label>
+                    <Select value={createUserFirmId} onValueChange={setCreateUserFirmId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select firm..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {firms.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className={`flex items-end ${createUserRole === 'admin' ? '' : ''}`}>
+                  <Button 
+                    onClick={handleCreateUser} 
+                    disabled={createUserLoading} 
+                    className="w-full"
+                  >
+                    {createUserLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Create User
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
+          {/* Users Table */}
           <Card>
-            <CardHeader><CardTitle>Pending Invitations</CardTitle></CardHeader>
-            <CardContent>{loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : pendingInvitations.length === 0 ? <p className="text-center text-sm text-muted-foreground py-8">No pending invitations</p> : <div className="space-y-3">{pendingInvitations.map(inv => <div key={inv.id} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{inv.email}</p><div className="flex items-center gap-2 text-xs text-muted-foreground"><Badge variant="secondary" className="text-xs">{inv.role}</Badge><span>Expires {formatDate(inv.expires_at)}</span></div></div></div>)}</div>}</CardContent>
+            <CardHeader>
+              <CardTitle>All Users</CardTitle>
+              <CardDescription>Manage user access. Expired users cannot access the platform.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingData ? (
+                <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Roles</TableHead>
+                      <TableHead>Firm</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map(u => (
+                      <TableRow key={u.id} className={u.expired ? 'opacity-60' : ''}>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span>{u.email}</span>
+                            {u.full_name && <span className="text-xs text-muted-foreground">{u.full_name}</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {u.roles.map(r => <Badge key={r} variant={r === 'admin' ? 'default' : 'secondary'}>{r}</Badge>)}
+                          </div>
+                        </TableCell>
+                        <TableCell>{u.firm_name || '—'}</TableCell>
+                        <TableCell>
+                          {u.expired ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-600">Expired</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-green-600 border-green-600">Active</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button 
+                            variant={u.expired ? 'outline' : 'destructive'} 
+                            size="sm" 
+                            onClick={() => handleToggleExpired(u.id, u.expired || false)} 
+                            disabled={expiringUserId === u.id}
+                          >
+                            {expiringUserId === u.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : u.expired ? (
+                              <><UserCheck className="h-4 w-4 mr-1" />Restore</>
+                            ) : (
+                              <><UserX className="h-4 w-4 mr-1" />Expire</>
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
           </Card>
         </div>
-      )}
-
-      {activeSection === 'users' && (
-        <Card>
-          <CardHeader><CardTitle>All Users</CardTitle><CardDescription>Manage user access. Expired users cannot access the platform.</CardDescription></CardHeader>
-          <CardContent>{loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : <Table><TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Roles</TableHead><TableHead>Firm</TableHead><TableHead>Status</TableHead><TableHead>Joined</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{users.map(u => <TableRow key={u.id} className={u.expired ? 'opacity-60' : ''}><TableCell><div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{u.email}</div></TableCell><TableCell><div className="flex gap-1">{u.roles.map(r => <Badge key={r} variant={r === 'admin' ? 'default' : 'secondary'}>{r}</Badge>)}</div></TableCell><TableCell>{u.firm_name || '—'}</TableCell><TableCell>{u.expired ? <Badge variant="outline" className="text-amber-600 border-amber-600">Expired</Badge> : <Badge variant="outline" className="text-green-600 border-green-600">Active</Badge>}</TableCell><TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell><TableCell className="text-right"><Button variant={u.expired ? 'outline' : 'destructive'} size="sm" onClick={() => handleToggleExpired(u.id, u.expired || false)} disabled={expiringUserId === u.id}>{expiringUserId === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : u.expired ? <><UserCheck className="h-4 w-4 mr-1" />Restore</> : <><UserX className="h-4 w-4 mr-1" />Expire</>}</Button></TableCell></TableRow>)}</TableBody></Table>}</CardContent>
-        </Card>
       )}
 
       {activeSection === 'firms' && (
