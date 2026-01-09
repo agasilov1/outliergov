@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.batch-upsert-cms]
 verify_jwt = false
+
+[functions.batch-upsert-anomalies-offline]
+verify_jwt = false
