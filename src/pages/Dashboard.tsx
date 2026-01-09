@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart3, TrendingUp, Loader2, CheckCircle2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Loader2 } from 'lucide-react';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 import { ProviderFilters } from '@/components/ProviderFilters';
 import {
@@ -30,6 +30,17 @@ interface AnomalyOffline {
   total_allowed_amount: number | null;
   beneficiary_count: number | null;
   service_count: number | null;
+  peer_median_allowed: number | null;
+  peer_group_size: number | null;
+  allowed_vs_peer_median: number | null;
+}
+
+interface YearData {
+  year: number;
+  percentile_rank: number;
+  total_allowed_amount: number;
+  allowed_vs_peer_median: number | null;
+  peer_group_size: number | null;
 }
 
 interface AggregatedProvider {
@@ -37,8 +48,9 @@ interface AggregatedProvider {
   provider_name: string;
   specialty: string;
   state: string;
-  years: { year: number; percentile_rank: number; total_allowed_amount: number }[];
+  years: YearData[];
   maxAllowedAmount: number;
+  maxPeerRatio: number | null;
   yearsVerified: number;
   rank: number;
 }
@@ -114,16 +126,18 @@ export default function Dashboard() {
           provider_name: row.provider_name || `Provider NPI ${row.npi}`,
           specialty: row.specialty || 'Unknown',
           state: row.state || 'Unknown',
-          years: []
+          years: [] as YearData[]
         };
       }
       acc[row.npi].years.push({
         year: row.year,
         percentile_rank: Number(row.percentile_rank) || 0,
-        total_allowed_amount: Number(row.total_allowed_amount) || 0
+        total_allowed_amount: Number(row.total_allowed_amount) || 0,
+        allowed_vs_peer_median: row.allowed_vs_peer_median,
+        peer_group_size: row.peer_group_size
       });
       return acc;
-    }, {} as Record<string, { npi: string; provider_name: string; specialty: string; state: string; years: { year: number; percentile_rank: number; total_allowed_amount: number }[] }>);
+    }, {} as Record<string, { npi: string; provider_name: string; specialty: string; state: string; years: YearData[] }>);
     
     // Convert to array and calculate metrics
     const providers: AggregatedProvider[] = Object.values(grouped).map((p) => {
@@ -131,22 +145,39 @@ export default function Dashboard() {
         ? Math.max(...p.years.map(y => y.total_allowed_amount)) 
         : 0;
       
+      // Calculate max peer ratio (× above median)
+      const peerRatios = p.years
+        .filter(y => y.allowed_vs_peer_median !== null)
+        .map(y => y.allowed_vs_peer_median!);
+      const maxPeerRatio = peerRatios.length > 0 
+        ? Math.max(...peerRatios) 
+        : null;
+      
       // Count years where percentile >= 0.995 (99.5th) - all are verified
       const yearsVerified = p.years.filter(y => y.percentile_rank >= 0.995).length;
       
       return {
         ...p,
         maxAllowedAmount,
+        maxPeerRatio,
         yearsVerified,
         rank: 0
       };
     });
     
-    // Sort by max allowed amount DESC (ranking by dollar amount)
+    // Sort by max peer ratio DESC (× above median), fallback to allowed amount
     providers.sort((a, b) => {
-      if (b.maxAllowedAmount !== a.maxAllowedAmount) 
-        return b.maxAllowedAmount - a.maxAllowedAmount;
-      return b.yearsVerified - a.yearsVerified;
+      // Providers with peer ratios rank higher than those without
+      if (a.maxPeerRatio !== null && b.maxPeerRatio === null) return -1;
+      if (a.maxPeerRatio === null && b.maxPeerRatio !== null) return 1;
+      
+      // Both have ratios - sort by ratio DESC
+      if (a.maxPeerRatio !== null && b.maxPeerRatio !== null) {
+        if (b.maxPeerRatio !== a.maxPeerRatio) return b.maxPeerRatio - a.maxPeerRatio;
+      }
+      
+      // Fallback to allowed amount
+      return b.maxAllowedAmount - a.maxAllowedAmount;
     });
     
     // Assign ranks
@@ -262,9 +293,9 @@ export default function Dashboard() {
       <DisclaimerBanner variant="detailed" />
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Verified Outlier Registry</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Outlier Provider Rankings</h1>
         <p className="text-muted-foreground">
-          Confirmed Top 0.5% providers by allowed amount. Click a row for details.
+          Ranked by multiples above specialty-state peer median. Click a row for details.
         </p>
       </div>
 
@@ -301,7 +332,7 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Verified Outliers</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Outlier Providers</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -309,14 +340,14 @@ export default function Dashboard() {
               {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : rankedProviders.length.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Confirmed Top 0.5% providers
+              Statistical outliers vs peer median
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified Both Years</CardTitle>
+            <CardTitle className="text-sm font-medium">Outliers Both Years</CardTitle>
             <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
           </CardHeader>
           <CardContent>
@@ -324,7 +355,7 @@ export default function Dashboard() {
               {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : allYearsVerifiedCount.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Top 0.5% in all analysis years
+              Above peer threshold in all years
             </p>
           </CardContent>
         </Card>
@@ -348,11 +379,11 @@ export default function Dashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Verified Outlier Rankings
+            Outlier Rankings by Peer Comparison
           </CardTitle>
           <CardDescription>
-            These providers are confirmed statistical outliers within their specialty and state peer groups. 
-            Rankings are by total allowed amount (descending).
+            These providers are statistical outliers within their specialty-state peer groups. 
+            Rankings are by × above peer median (highest first). Providers without peer data appear at the bottom.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -401,11 +432,11 @@ export default function Dashboard() {
                       <TableHead>NPI</TableHead>
                       <TableHead>Specialty</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead className="text-right">Max Allowed Amount</TableHead>
+                      <TableHead className="text-right">× Above Median</TableHead>
+                      <TableHead className="text-right">Max Allowed</TableHead>
                       {uniqueYears.map(year => (
                         <TableHead key={year} className="text-center">{year}</TableHead>
                       ))}
-                      <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -427,29 +458,31 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell>{provider.specialty}</TableCell>
                           <TableCell>{provider.state}</TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right">
+                            {provider.maxPeerRatio !== null ? (
+                              <Badge variant="destructive" className="font-mono">
+                                {provider.maxPeerRatio.toFixed(1)}×
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm italic">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
                             {formatCurrency(provider.maxAllowedAmount)}
                           </TableCell>
                           {uniqueYears.map(year => {
                             const yearData = provider.years.find(y => y.year === year);
-                            const isVerified = yearData && yearData.percentile_rank >= 0.995;
                             return (
-                              <TableCell key={year} className="text-center">
-                                {isVerified ? (
-                                  <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
-                                ) : yearData ? (
-                                  <span className="text-muted-foreground">-</span>
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
+                              <TableCell key={year} className="text-center font-mono text-sm">
+                                {yearData?.allowed_vs_peer_median !== null && yearData?.allowed_vs_peer_median !== undefined
+                                  ? `${yearData.allowed_vs_peer_median.toFixed(1)}×`
+                                  : yearData 
+                                    ? <span className="text-muted-foreground">-</span>
+                                    : <span className="text-muted-foreground">-</span>
+                                }
                               </TableCell>
                             );
                           })}
-                          <TableCell className="text-center">
-                            <Badge variant="destructive" className="font-mono">
-                              ✓ Verified
-                            </Badge>
-                          </TableCell>
                         </TableRow>
                       );
                     })}
