@@ -151,22 +151,35 @@ Deno.serve(async (req) => {
       ruleSetVersion
     });
 
-    // First, ensure peer group stats exist for the years
-    console.log('Computing/refreshing peer group stats...');
-    const { data: statsResult, error: statsError } = await supabaseAdmin
-      .rpc('compute_peer_group_stats', {
-        p_dataset_release_id: datasetReleaseId,
-        p_years: yearsWindow,
-        p_metric_name: metricName,
-        p_peer_group_key: peerGroupKey,
-        p_peer_group_version: peerGroupVersion
-      });
+    // Process peer group stats ONE YEAR AT A TIME to avoid timeouts
+    console.log('Computing/refreshing peer group stats year by year...');
+    let totalGroupsComputed = 0;
+    
+    for (const year of yearsWindow) {
+      console.log(`Processing peer group stats for year ${year}...`);
+      const startTime = Date.now();
+      
+      const { data: statsResult, error: statsError } = await supabaseAdmin
+        .rpc('compute_peer_group_stats', {
+          p_dataset_release_id: datasetReleaseId,
+          p_years: [year], // Single year at a time
+          p_metric_name: metricName,
+          p_peer_group_key: peerGroupKey,
+          p_peer_group_version: peerGroupVersion
+        });
 
-    if (statsError) {
-      console.error('Error computing peer group stats:', statsError);
-      throw new Error(`Failed to compute peer group stats: ${statsError.message}`);
+      if (statsError) {
+        console.error(`Error computing peer group stats for year ${year}:`, statsError);
+        throw new Error(`Failed to compute peer group stats for year ${year}: ${statsError.message}`);
+      }
+      
+      const elapsed = Date.now() - startTime;
+      const groupsForYear = statsResult?.[0]?.groups_computed ?? 0;
+      totalGroupsComputed += groupsForYear;
+      console.log(`Year ${year} completed in ${elapsed}ms: ${groupsForYear} groups computed`);
     }
-    console.log('Peer group stats result:', statsResult);
+    
+    console.log(`All peer group stats computed. Total groups: ${totalGroupsComputed}`);
 
     // Now compute anomaly flags using the v2 function
     console.log('Computing anomaly flags...');
