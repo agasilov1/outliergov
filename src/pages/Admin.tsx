@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -650,21 +651,19 @@ export default function Admin() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant={u.expired ? 'outline' : 'secondary'} 
-                              size="sm" 
-                              onClick={() => handleToggleExpired(u.id, u.expired || false)} 
-                              disabled={expiringUserId === u.id}
-                            >
-                              {expiringUserId === u.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : u.expired ? (
-                                <><UserCheck className="h-4 w-4 mr-1" />Restore</>
-                              ) : (
-                                <><UserX className="h-4 w-4 mr-1" />Expire</>
-                              )}
-                            </Button>
+                          <div className="flex items-center justify-end gap-3">
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={u.expired || false}
+                                onCheckedChange={() => handleToggleExpired(u.id, u.expired || false)}
+                                disabled={expiringUserId === u.id || u.id === user?.id}
+                              />
+                              <span className={`text-xs font-medium ${u.expired ? 'text-amber-600' : 'text-green-600'}`}>
+                                {expiringUserId === u.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : u.expired ? 'Expired' : 'Active'}
+                              </span>
+                            </div>
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -735,21 +734,19 @@ export default function Admin() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{f.created_at ? formatDate(f.created_at) : '—'}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant={f.expired ? 'outline' : 'secondary'} 
-                              size="sm" 
-                              onClick={() => handleToggleFirmExpired(f.id, f.expired || false)} 
-                              disabled={expiringFirmId === f.id}
-                            >
-                              {expiringFirmId === f.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : f.expired ? (
-                                <><CheckCircle2 className="h-4 w-4 mr-1" />Restore</>
-                              ) : (
-                                <><XCircle className="h-4 w-4 mr-1" />Expire</>
-                              )}
-                            </Button>
+                          <div className="flex items-center justify-end gap-3">
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={f.expired || false}
+                                onCheckedChange={() => handleToggleFirmExpired(f.id, f.expired || false)}
+                                disabled={expiringFirmId === f.id}
+                              />
+                              <span className={`text-xs font-medium ${f.expired ? 'text-amber-600' : 'text-green-600'}`}>
+                                {expiringFirmId === f.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : f.expired ? 'Expired' : 'Active'}
+                              </span>
+                            </div>
                             <Button 
                               variant="ghost" 
                               size="sm" 
