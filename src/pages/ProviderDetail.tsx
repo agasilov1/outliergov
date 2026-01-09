@@ -21,6 +21,12 @@ interface AnomalyOffline {
   total_allowed_amount: number | null;
   beneficiary_count: number | null;
   service_count: number | null;
+  // Peer comparison fields
+  peer_median_allowed: number | null;
+  peer_p75_allowed: number | null;
+  peer_group_size: number | null;
+  allowed_vs_peer_median: number | null;
+  allowed_vs_peer_median_log: number | null;
 }
 
 export default function ProviderDetail() {
@@ -76,13 +82,16 @@ export default function ProviderDetail() {
     };
   }, [anomalyData]);
 
-  // Transform anomaly data to flag years format
+  // Transform anomaly data to flag years format with peer comparison
   const flagYears = useMemo(() => {
     if (!anomalyData) return [];
     return anomalyData.map(row => ({
       year: row.year,
       percentile_rank: Number(row.percentile_rank) || 0,
-      value: Number(row.total_allowed_amount) || 0
+      value: Number(row.total_allowed_amount) || 0,
+      peer_median_allowed: row.peer_median_allowed ? Number(row.peer_median_allowed) : null,
+      peer_group_size: row.peer_group_size ? Number(row.peer_group_size) : null,
+      allowed_vs_peer_median: row.allowed_vs_peer_median ? Number(row.allowed_vs_peer_median) : null
     }));
   }, [anomalyData]);
 
@@ -173,6 +182,12 @@ export default function ProviderDetail() {
                   {formatCurrency(Math.max(...flagYears.map(y => y.value)))}
                 </span>
               </div>
+              {flagYears[0]?.peer_group_size && (
+                <div>
+                  <span className="text-muted-foreground">Peer Group Size: </span>
+                  <span className="font-semibold">{flagYears[0].peer_group_size.toLocaleString()} providers</span>
+                </div>
+              )}
             </div>
           </CardContent>
         )}
@@ -214,7 +229,9 @@ export default function ProviderDetail() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Year</TableHead>
-                  <TableHead className="text-right">Total Allowed Amount</TableHead>
+                  <TableHead className="text-right">Total Allowed</TableHead>
+                  <TableHead className="text-right">Peer Median</TableHead>
+                  <TableHead className="text-right">vs Median</TableHead>
                   <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -227,6 +244,16 @@ export default function ProviderDetail() {
                       <TableCell className="font-medium">{fy.year}</TableCell>
                       <TableCell className="text-right font-mono">
                         {formatCurrency(fy.value)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {fy.peer_median_allowed ? formatCurrency(fy.peer_median_allowed) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {fy.allowed_vs_peer_median ? (
+                          <Badge variant="outline" className="font-mono">
+                            {fy.allowed_vs_peer_median.toFixed(1)}x
+                          </Badge>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-center">
                         {isVerified ? (
