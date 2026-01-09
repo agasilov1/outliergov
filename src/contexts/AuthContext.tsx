@@ -10,6 +10,8 @@ interface AuthContextType {
   loading: boolean;
   roles: AppRole[];
   isAdmin: boolean;
+  mustChangePassword: boolean;
+  clearMustChangePassword: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -20,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -28,13 +31,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Defer role fetching to avoid deadlock
+        // Defer role and profile fetching to avoid deadlock
         if (session?.user) {
           setTimeout(() => {
             fetchUserRoles(session.user.id);
+            fetchMustChangePassword(session.user.id);
           }, 0);
         } else {
           setRoles([]);
+          setMustChangePassword(false);
         }
       }
     );
@@ -46,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session?.user) {
         fetchUserRoles(session.user.id);
+        fetchMustChangePassword(session.user.id);
       }
       
       setLoading(false);
@@ -73,11 +79,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function fetchMustChangePassword(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('must_change_password')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching must_change_password:', error);
+        return;
+      }
+
+      setMustChangePassword(data?.must_change_password === true);
+    } catch (err) {
+      console.error('Error fetching must_change_password:', err);
+    }
+  }
+
+  function clearMustChangePassword() {
+    setMustChangePassword(false);
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
     setRoles([]);
+    setMustChangePassword(false);
   }
 
   const value: AuthContextType = {
@@ -86,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     roles,
     isAdmin: roles.includes('admin'),
+    mustChangePassword,
+    clearMustChangePassword,
     signOut,
   };
 

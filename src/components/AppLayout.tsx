@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { DisclaimerBanner } from './DisclaimerBanner';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -28,11 +29,15 @@ const adminNavigation = [
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, signOut, mustChangePassword, clearMustChangePassword } = useAuth();
   const location = useLocation();
 
   return (
     <div className="flex min-h-screen flex-col">
+      <ChangePasswordModal 
+        open={mustChangePassword} 
+        onPasswordChanged={clearMustChangePassword} 
+      />
       <DisclaimerBanner />
       
       <div className="flex flex-1">
