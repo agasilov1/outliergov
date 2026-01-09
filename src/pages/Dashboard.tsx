@@ -6,10 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart3, Users, TrendingUp, Loader2, Info } from 'lucide-react';
+import { BarChart3, TrendingUp, Loader2, CheckCircle2 } from 'lucide-react';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
-import { ProviderFilters, ConfidenceLevel } from '@/components/ProviderFilters';
-import { ConfidenceBadge, getConfidenceLevel } from '@/components/ConfidenceBadge';
+import { ProviderFilters } from '@/components/ProviderFilters';
 
 interface AnomalyOffline {
   id: string;
@@ -30,10 +29,8 @@ interface AggregatedProvider {
   specialty: string;
   state: string;
   years: { year: number; percentile_rank: number; total_allowed_amount: number }[];
-  maxPercentile: number;
-  minPeerSize: number;
-  yearsAboveThreshold: number;
-  confidence: ConfidenceLevel;
+  maxAllowedAmount: number;
+  yearsVerified: number;
   rank: number;
 }
 
@@ -44,8 +41,6 @@ export default function Dashboard() {
   // Filter state
   const [stateFilter, setStateFilter] = useState<string[]>([]);
   const [specialtyFilter, setSpecialtyFilter] = useState<string[]>([]);
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceLevel[]>([]);
-  const [minPeerSizeFilter, setMinPeerSizeFilter] = useState(0);
 
   // Fetch ALL data from anomalies_offline
   const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
@@ -85,32 +80,26 @@ export default function Dashboard() {
     
     // Convert to array and calculate metrics
     const providers: AggregatedProvider[] = Object.values(grouped).map((p) => {
-      const maxPercentile = p.years.length > 0 
-        ? Math.max(...p.years.map(y => y.percentile_rank)) 
+      const maxAllowedAmount = p.years.length > 0 
+        ? Math.max(...p.years.map(y => y.total_allowed_amount)) 
         : 0;
       
-      // Count years where percentile >= 0.995 (99.5th)
-      const yearsAboveThreshold = p.years.filter(y => y.percentile_rank >= 0.995).length;
-      
-      // We don't have peer_size in anomalies_offline, so assume high confidence (peer size >= 20)
-      const minPeerSize = 20;
-      const confidence = getConfidenceLevel(minPeerSize);
+      // Count years where percentile >= 0.995 (99.5th) - all are verified
+      const yearsVerified = p.years.filter(y => y.percentile_rank >= 0.995).length;
       
       return {
         ...p,
-        maxPercentile,
-        minPeerSize,
-        yearsAboveThreshold,
-        confidence,
+        maxAllowedAmount,
+        yearsVerified,
         rank: 0
       };
     });
     
-    // Sort by max percentile DESC
+    // Sort by max allowed amount DESC (ranking by dollar amount)
     providers.sort((a, b) => {
-      if (b.maxPercentile !== a.maxPercentile) 
-        return b.maxPercentile - a.maxPercentile;
-      return b.yearsAboveThreshold - a.yearsAboveThreshold;
+      if (b.maxAllowedAmount !== a.maxAllowedAmount) 
+        return b.maxAllowedAmount - a.maxAllowedAmount;
+      return b.yearsVerified - a.yearsVerified;
     });
     
     // Assign ranks
@@ -136,11 +125,9 @@ export default function Dashboard() {
     return rankedProviders.filter(p => {
       if (stateFilter.length > 0 && !stateFilter.includes(p.state)) return false;
       if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.specialty)) return false;
-      if (confidenceFilter.length > 0 && !confidenceFilter.includes(p.confidence)) return false;
-      if (p.minPeerSize < minPeerSizeFilter) return false;
       return true;
     });
-  }, [rankedProviders, stateFilter, specialtyFilter, confidenceFilter, minPeerSizeFilter]);
+  }, [rankedProviders, stateFilter, specialtyFilter]);
 
   // Derive unique years from anomalies_offline
   const uniqueYears = useMemo(() => {
@@ -155,28 +142,22 @@ export default function Dashboard() {
     return `${uniqueYears[0]}-${uniqueYears[uniqueYears.length - 1]}`;
   }, [uniqueYears]);
 
-  // Stats calculations
-  const highConfidenceCount = rankedProviders.filter(p => p.confidence === 'high').length;
-  
-  // Count providers with percentile >= 0.995 in ALL years
-  const anomalyCount = rankedProviders.filter(p => 
-    p.yearsAboveThreshold === uniqueYears.length && uniqueYears.length > 0
+  // Count providers verified in ALL years
+  const allYearsVerifiedCount = rankedProviders.filter(p => 
+    p.yearsVerified === uniqueYears.length && uniqueYears.length > 0
   ).length;
 
-  const formatPercentile = (value: number) => {
-    // Convert from decimal (0.995) to percentage (99.5th)
-    const pct = value * 100;
-    if (pct >= 99.9) return '≥99.9th';
-    return `${pct.toFixed(1)}th`;
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
   };
 
   const handleRowClick = (npi: string, rank: number, totalCount: number) => {
     navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}`);
-  };
-
-  const getPercentileForYear = (provider: AggregatedProvider, year: number) => {
-    const yearData = provider.years.find(y => y.year === year);
-    return yearData?.percentile_rank;
   };
 
   const getProviderDisplayName = (provider: AggregatedProvider) => {
@@ -189,8 +170,6 @@ export default function Dashboard() {
   const handleClearAllFilters = () => {
     setStateFilter([]);
     setSpecialtyFilter([]);
-    setConfidenceFilter([]);
-    setMinPeerSizeFilter(0);
   };
 
   return (
@@ -199,9 +178,9 @@ export default function Dashboard() {
       <DisclaimerBanner variant="detailed" />
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Statistical Outlier Rankings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Verified Outlier Registry</h1>
         <p className="text-muted-foreground">
-          Providers ranked by statistical variance from peers. Click a row to view details.
+          Confirmed Top 0.5% providers by allowed amount. Click a row for details.
         </p>
       </div>
 
@@ -235,10 +214,10 @@ export default function Dashboard() {
       </Card>
 
       {/* Stats overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Ranked Providers</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Verified Outliers</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -246,37 +225,22 @@ export default function Dashboard() {
               {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : rankedProviders.length.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Unique providers in dataset
+              Confirmed Top 0.5% providers
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Anomalies (Both Years)</CardTitle>
+            <CardTitle className="text-sm font-medium">Verified Both Years</CardTitle>
             <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">
-              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : anomalyCount.toLocaleString()}
+              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : allYearsVerifiedCount.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              ≥99.5th percentile in all years
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">High Confidence</CardTitle>
-            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">High</Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-700">
-              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : highConfidenceCount.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Peer group size ≥ 20
+              Top 0.5% in all analysis years
             </p>
           </CardContent>
         </Card>
@@ -300,11 +264,11 @@ export default function Dashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Provider Rankings
+            Verified Outlier Rankings
           </CardTitle>
           <CardDescription>
-            All statistical outliers ranked by maximum percentile (descending). 
-            Confidence labels reflect peer group size for statistical significance.
+            These providers are confirmed statistical outliers within their specialty and state peer groups. 
+            Rankings are by total allowed amount (descending).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -314,12 +278,8 @@ export default function Dashboard() {
             specialties={filterOptions.specialties}
             selectedStates={stateFilter}
             selectedSpecialties={specialtyFilter}
-            selectedConfidence={confidenceFilter}
-            minPeerSize={minPeerSizeFilter}
             onStateChange={setStateFilter}
             onSpecialtyChange={setSpecialtyFilter}
-            onConfidenceChange={setConfidenceFilter}
-            onMinPeerSizeChange={setMinPeerSizeFilter}
             onClearAll={handleClearAllFilters}
             totalCount={rankedProviders.length}
             filteredCount={filteredProviders.length}
@@ -346,18 +306,15 @@ export default function Dashboard() {
                     <TableHead>NPI</TableHead>
                     <TableHead>Specialty</TableHead>
                     <TableHead>State</TableHead>
+                    <TableHead className="text-right">Max Allowed Amount</TableHead>
                     {uniqueYears.map(year => (
-                      <TableHead key={year} className="text-right">{year}</TableHead>
+                      <TableHead key={year} className="text-center">{year}</TableHead>
                     ))}
-                    <TableHead className="text-right">Max %ile</TableHead>
-                    <TableHead className="text-right">Min Peers</TableHead>
-                    <TableHead>Confidence</TableHead>
+                    <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProviders.map((provider) => {
-                    const isLowPeer = provider.minPeerSize < 20;
-
                     return (
                       <TableRow
                         key={provider.npi}
@@ -375,35 +332,28 @@ export default function Dashboard() {
                         </TableCell>
                         <TableCell>{provider.specialty}</TableCell>
                         <TableCell>{provider.state}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(provider.maxAllowedAmount)}
+                        </TableCell>
                         {uniqueYears.map(year => {
-                          const percentile = getPercentileForYear(provider, year);
+                          const yearData = provider.years.find(y => y.year === year);
+                          const isVerified = yearData && yearData.percentile_rank >= 0.995;
                           return (
-                            <TableCell key={year} className="text-right">
-                              {percentile !== undefined ? (
-                                <Badge variant="secondary" className="font-mono">
-                                  {formatPercentile(percentile)}
-                                </Badge>
-                              ) : '-'}
+                            <TableCell key={year} className="text-center">
+                              {isVerified ? (
+                                <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
+                              ) : yearData ? (
+                                <span className="text-muted-foreground">-</span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </TableCell>
                           );
                         })}
-                        <TableCell className="text-right">
+                        <TableCell className="text-center">
                           <Badge variant="destructive" className="font-mono">
-                            {formatPercentile(provider.maxPercentile)}
+                            ✓ Verified
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {isLowPeer && (
-                              <Info className="h-3 w-3 text-amber-500" />
-                            )}
-                            <span className={isLowPeer ? 'text-amber-500' : ''}>
-                              {provider.minPeerSize}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <ConfidenceBadge confidence={provider.confidence} />
                         </TableCell>
                       </TableRow>
                     );

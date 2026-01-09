@@ -1,10 +1,10 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Printer, X, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { ConfidenceBadge, getConfidenceLevel, getConfidenceLabel } from '@/components/ConfidenceBadge';
 
 interface Provider {
   id: string;
@@ -102,10 +102,6 @@ export function ProviderBrief({
     }).format(value);
   };
 
-  const formatPercentile = (value: number) => {
-    return `${value.toFixed(1)}th`;
-  };
-
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -128,8 +124,7 @@ export function ProviderBrief({
           npi: provider.npi,
           dataset_release_id: datasetRelease?.id,
           compute_run_id: computeRun?.id,
-          rank,
-          confidence
+          rank
         }
       });
     }
@@ -138,10 +133,7 @@ export function ProviderBrief({
   };
 
   const uniqueYears = [...new Set(flagYears.map(fy => fy.year))].sort();
-  const minPeerSize = flagYears.length > 0 ? Math.min(...flagYears.map(fy => fy.peer_size)) : 0;
-  const maxPercentile = flagYears.length > 0 ? Math.max(...flagYears.map(fy => fy.percentile_rank)) : 0;
-  const confidence = getConfidenceLevel(minPeerSize);
-  const confidenceLabel = getConfidenceLabel(confidence);
+  const yearsVerified = flagYears.filter(fy => fy.percentile_rank >= 99.5).length;
 
   const getProviderDisplayName = () => {
     if (provider.provider_name === provider.npi) {
@@ -185,24 +177,14 @@ export function ProviderBrief({
 
           {/* Statistical Ranking Section */}
           {anomalyFlagV2 && (
-            <section className={`rounded-lg border p-4 ${
-              confidence === 'high' 
-                ? 'border-emerald-500/50 bg-emerald-500/10' 
-                : confidence === 'medium'
-                ? 'border-amber-500/50 bg-amber-500/10'
-                : 'border-gray-500/50 bg-gray-500/10'
-            }`}>
+            <section className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
               <div className="flex items-start gap-3">
-                <ConfidenceBadge confidence={confidence} />
+                <Badge variant="destructive" className="px-3 py-1">
+                  ✓ Top 0.5% Verified
+                </Badge>
                 <div className="flex-1">
-                  <h3 className={`font-semibold ${
-                    confidence === 'high' 
-                      ? 'text-emerald-700' 
-                      : confidence === 'medium'
-                      ? 'text-amber-700'
-                      : 'text-gray-700'
-                  }`}>
-                    {confidenceLabel}
+                  <h3 className="font-semibold text-destructive">
+                    Verified Statistical Outlier
                   </h3>
                   
                   {/* Ranking info */}
@@ -214,20 +196,12 @@ export function ProviderBrief({
                       </div>
                     )}
                     <div>
-                      <span className="text-muted-foreground">Confidence Level: </span>
-                      <span className="font-semibold capitalize">{confidence}</span>
+                      <span className="text-muted-foreground">Status: </span>
+                      <span className="font-semibold">Top 0.5% Verified</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Max Percentile: </span>
-                      <span className="font-semibold">{formatPercentile(maxPercentile)}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Years Above Threshold: </span>
-                      <span className="font-semibold">{flagYears.length}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Min Peer Group Size: </span>
-                      <span className="font-semibold">{minPeerSize} providers</span>
+                      <span className="text-muted-foreground">Years Verified: </span>
+                      <span className="font-semibold">{yearsVerified} of {uniqueYears.length}</span>
                     </div>
                   </div>
                 </div>
@@ -302,8 +276,8 @@ export function ProviderBrief({
             <h2 className="mb-3 text-lg font-semibold">Statistical Summary</h2>
             {anomalyFlagV2 && (
               <p className="mb-4 text-sm">
-                This provider's total allowed amount ranked at or above the {anomalyFlagV2.threshold_percentile_required}th percentile 
-                within their peer group ({anomalyFlagV2.peer_group_key}) for {flagYears.length} years.
+                This provider is a confirmed Top 0.5% statistical outlier by allowed amount 
+                within their peer group ({anomalyFlagV2.peer_group_key}) for {yearsVerified} year(s).
                 {!anomalyFlagV2.flagged && anomalyFlagV2.flag_reason && (
                   <span className="block mt-2 text-amber-600">
                     <strong>Classification Note:</strong> {anomalyFlagV2.flag_reason}
@@ -333,12 +307,18 @@ export function ProviderBrief({
                   })}
                 </tr>
                 <tr className="border-b">
-                  <td className="py-2 font-medium">Provider Percentile Rank</td>
+                  <td className="py-2 font-medium">Top 0.5% (Verified)</td>
                   {uniqueYears.map(year => {
                     const flagYear = flagYears.find(fy => fy.year === year);
+                    const isVerified = flagYear && flagYear.percentile_rank >= 99.5;
                     return (
                       <td key={year} className="py-2 text-right">
-                        {flagYear ? formatPercentile(Number(flagYear.percentile_rank)) : '-'}
+                        {isVerified ? (
+                          <span className="inline-flex items-center gap-1">
+                            <CheckCircle2 className="h-4 w-4 text-destructive" />
+                            <span className="text-destructive">Verified</span>
+                          </span>
+                        ) : '-'}
                       </td>
                     );
                   })}
@@ -354,28 +334,6 @@ export function ProviderBrief({
                     );
                   })}
                 </tr>
-                <tr className="border-b">
-                  <td className="py-2 font-medium">Peer Group Median</td>
-                  {uniqueYears.map(year => {
-                    const stats = peerStats.find(s => s.year === year);
-                    return (
-                      <td key={year} className="py-2 text-right">
-                        {stats ? formatCurrency(stats.median) : '-'}
-                      </td>
-                    );
-                  })}
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 font-medium">99.0th Percentile Threshold</td>
-                  {uniqueYears.map(year => {
-                    const flagYear = flagYears.find(fy => fy.year === year);
-                    return (
-                      <td key={year} className="py-2 text-right">
-                        {flagYear ? formatCurrency(Number(flagYear.p995_threshold)) : '-'}
-                      </td>
-                    );
-                  })}
-                </tr>
               </tbody>
             </table>
           </section>
@@ -385,12 +343,8 @@ export function ProviderBrief({
             <h2 className="mb-3 text-lg font-semibold">Methodology</h2>
             <p className="text-sm">
               Peer groups are defined by {anomalyFlagV2?.peer_group_key || 'specialty and state'}. 
-              Percentile rank is calculated using the PERCENT_RANK function on {anomalyFlagV2?.metric_name || 'total allowed amounts'} 
-              within each peer group for each calendar year. Providers are ranked by maximum percentile across analyzed years.
-            </p>
-            <p className="text-sm mt-2">
-              <strong>Confidence levels:</strong> High (peer size ≥ 20), Medium (peer size 10-19), Low (peer size &lt; 10). 
-              Confidence reflects statistical significance of the peer comparison, not severity of the anomaly.
+              Providers are verified as Top 0.5% outliers based on {anomalyFlagV2?.metric_name || 'total allowed amounts'} 
+              within each peer group for each calendar year. Rankings are by total allowed amount (descending).
             </p>
             {anomalyFlagV2 && (
               <p className="mt-2 text-sm">
@@ -407,9 +361,9 @@ export function ProviderBrief({
               <strong>This ranking reflects statistical variance only and is intended for prioritization, not conclusions.</strong>
             </p>
             <p className="text-sm mt-2">
-              This report identifies statistical outliers based on publicly available Medicare 
-              payment data. A high percentile rank indicates that a provider received more in 
-              allowed amounts than most peers in their specialty and state. <strong>This is not 
+              This report identifies verified statistical outliers based on publicly available Medicare 
+              payment data. A Top 0.5% verification indicates that a provider received more in 
+              allowed amounts than 99.5% of peers in their specialty and state. <strong>This is not 
               evidence of wrongdoing.</strong> Many legitimate factors can explain high volumes, 
               including practice size, patient complexity, subspecialty focus, or geographic 
               patient catchment areas.

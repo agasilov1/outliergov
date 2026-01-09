@@ -2,25 +2,18 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronDown, X, Filter } from 'lucide-react';
-
-export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 interface ProviderFiltersProps {
   states: string[];
   specialties: string[];
   selectedStates: string[];
   selectedSpecialties: string[];
-  selectedConfidence: ConfidenceLevel[];
-  minPeerSize: number;
   onStateChange: (states: string[]) => void;
   onSpecialtyChange: (specialties: string[]) => void;
-  onConfidenceChange: (confidence: ConfidenceLevel[]) => void;
-  onMinPeerSizeChange: (size: number) => void;
   onClearAll: () => void;
   totalCount: number;
   filteredCount: number;
@@ -114,40 +107,20 @@ function MultiSelectFilter({ label, options, selected, onChange }: MultiSelectFi
   );
 }
 
-const confidenceOptions: { value: ConfidenceLevel; label: string; description: string }[] = [
-  { value: 'high', label: 'High', description: 'Peer size ≥ 20' },
-  { value: 'medium', label: 'Medium', description: 'Peer size 10-19' },
-  { value: 'low', label: 'Low', description: 'Peer size < 10' },
-];
-
 export function ProviderFilters({
   states,
   specialties,
   selectedStates,
   selectedSpecialties,
-  selectedConfidence,
-  minPeerSize,
   onStateChange,
   onSpecialtyChange,
-  onConfidenceChange,
-  onMinPeerSizeChange,
   onClearAll,
   totalCount,
   filteredCount,
 }: ProviderFiltersProps) {
   const hasActiveFilters = 
     selectedStates.length > 0 || 
-    selectedSpecialties.length > 0 || 
-    selectedConfidence.length > 0 || 
-    minPeerSize > 0;
-
-  const handleConfidenceToggle = (value: ConfidenceLevel) => {
-    if (selectedConfidence.includes(value)) {
-      onConfidenceChange(selectedConfidence.filter(c => c !== value));
-    } else {
-      onConfidenceChange([...selectedConfidence, value]);
-    }
-  };
+    selectedSpecialties.length > 0;
 
   return (
     <div className="space-y-3">
@@ -171,55 +144,6 @@ export function ProviderFilters({
           onChange={onSpecialtyChange}
         />
         
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-1">
-              Confidence
-              {selectedConfidence.length > 0 && (
-                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
-                  {selectedConfidence.length}
-                </Badge>
-              )}
-              <ChevronDown className="h-3 w-3 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-2" align="start">
-            <div className="space-y-1">
-              {confidenceOptions.map((option) => (
-                <div
-                  key={option.value}
-                  className="flex items-center space-x-2 p-2 rounded hover:bg-muted cursor-pointer"
-                  onClick={() => handleConfidenceToggle(option.value)}
-                >
-                  <Checkbox
-                    checked={selectedConfidence.includes(option.value)}
-                    onCheckedChange={() => handleConfidenceToggle(option.value)}
-                  />
-                  <div>
-                    <span className="text-sm font-medium">{option.label}</span>
-                    <p className="text-xs text-muted-foreground">{option.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        <div className="flex items-center gap-2">
-          <Label htmlFor="min-peer-size" className="text-sm whitespace-nowrap">
-            Min Peer Size:
-          </Label>
-          <Input
-            id="min-peer-size"
-            type="number"
-            min={0}
-            value={minPeerSize || ''}
-            onChange={(e) => onMinPeerSizeChange(parseInt(e.target.value) || 0)}
-            className="h-9 w-20"
-            placeholder="0"
-          />
-        </div>
-        
         {hasActiveFilters && (
           <Button
             variant="ghost"
@@ -235,7 +159,7 @@ export function ProviderFilters({
       
       {/* Results count */}
       <div className="text-sm text-muted-foreground">
-        Showing {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} statistical outliers
+        Showing {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} verified outliers
       </div>
     </div>
   );

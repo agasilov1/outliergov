@@ -6,9 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2 } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
-import { ConfidenceBadge, getConfidenceLevel, getConfidenceLabel } from '@/components/ConfidenceBadge';
 import { useEffect, useMemo } from 'react';
 
 interface AnomalyOffline {
@@ -87,10 +86,7 @@ export default function ProviderDetail() {
     }));
   }, [anomalyData]);
 
-  // Calculate confidence - all providers in anomalies_offline are verified outliers
-  const minPeerSize = 20; // Assumed since not available in anomalies_offline
-  const confidence = getConfidenceLevel(minPeerSize);
-  const confidenceLabel = getConfidenceLabel(confidence);
+  const yearsVerified = flagYears.filter(y => y.percentile_rank >= 0.995).length;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -99,13 +95,6 @@ export default function ProviderDetail() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value);
-  };
-
-  const formatPercentile = (value: number) => {
-    // Convert from decimal (0.995) to percentage (99.5th)
-    const pct = value * 100;
-    if (pct >= 99.9) return '≥99.9th';
-    return `${pct.toFixed(1)}th`;
   };
 
   const getProviderDisplayName = () => {
@@ -166,54 +155,41 @@ export default function ProviderDetail() {
                 </p>
               )}
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <ConfidenceBadge confidence={confidence} className="px-3 py-1" />
-              <span className="text-xs text-muted-foreground">{confidenceLabel}</span>
-            </div>
+            <Badge variant="destructive" className="px-3 py-1">
+              ✓ Top 0.5% Verified
+            </Badge>
           </div>
         </CardHeader>
         {flagYears.length > 0 && (
           <CardContent>
             <div className="flex flex-wrap gap-4 text-sm">
-              {flagYears.map(fy => (
-                <div key={fy.year}>
-                  <span className="text-muted-foreground">{fy.year} Percentile Rank: </span>
-                  <span className="font-semibold">{formatPercentile(fy.percentile_rank)}</span>
-                </div>
-              ))}
               <div>
-                <span className="text-muted-foreground">Years Above Threshold: </span>
-                <span className="font-semibold">{flagYears.filter(y => y.percentile_rank >= 0.995).length}</span>
+                <span className="text-muted-foreground">Years Verified: </span>
+                <span className="font-semibold">{yearsVerified} of {flagYears.length}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Max Allowed Amount: </span>
+                <span className="font-semibold">
+                  {formatCurrency(Math.max(...flagYears.map(y => y.value)))}
+                </span>
               </div>
             </div>
           </CardContent>
         )}
       </Card>
 
-      {/* Classification Explanation Card */}
-      <Card className={
-        confidence === 'high' 
-          ? "border-emerald-500/30 bg-emerald-500/5" 
-          : confidence === 'medium'
-          ? "border-amber-500/30 bg-amber-500/5"
-          : "border-gray-500/30 bg-gray-500/5"
-      }>
+      {/* Verification Statement Card */}
+      <Card className="border-destructive/30 bg-destructive/5">
         <CardContent className="py-4">
           <div className="flex items-start gap-3">
-            <ConfidenceBadge confidence={confidence} />
+            <CheckCircle2 className="h-5 w-5 text-destructive mt-0.5" />
             <div>
-              <h3 className={`font-semibold ${
-                confidence === 'high' 
-                  ? 'text-emerald-700' 
-                  : confidence === 'medium'
-                  ? 'text-amber-700'
-                  : 'text-gray-700'
-              }`}>
-                {confidenceLabel}
+              <h3 className="font-semibold text-destructive">
+                Verified Statistical Outlier
               </h3>
               <p className="text-sm mt-1">
-                This provider's total allowed amount ranked at or above the 99.5th percentile 
-                within their peer group for {flagYears.filter(y => y.percentile_rank >= 0.995).length} year(s). 
+                This provider is a confirmed Top 0.5% statistical outlier by allowed amount 
+                within their specialty-state peer group for {yearsVerified} year(s). 
                 This is statistical variance only—not evidence of any wrongdoing.
               </p>
             </div>
@@ -230,7 +206,7 @@ export default function ProviderDetail() {
               Per-Year Statistical Breakdown
             </CardTitle>
             <CardDescription>
-              Authoritative percentile ranks for each analysis year (statistical variance only)
+              Verified Top 0.5% status for each analysis year (statistical variance only)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -238,14 +214,13 @@ export default function ProviderDetail() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Year</TableHead>
-                  <TableHead className="text-right">Provider Value</TableHead>
-                  <TableHead className="text-right">Percentile Rank</TableHead>
-                  <TableHead className="text-center">Met Threshold (≥99.5th)</TableHead>
+                  <TableHead className="text-right">Total Allowed Amount</TableHead>
+                  <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {flagYears.map(fy => {
-                  const meetsThreshold = fy.percentile_rank >= 0.995;
+                  const isVerified = fy.percentile_rank >= 0.995;
                   
                   return (
                     <TableRow key={fy.year}>
@@ -253,16 +228,14 @@ export default function ProviderDetail() {
                       <TableCell className="text-right font-mono">
                         {formatCurrency(fy.value)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={meetsThreshold ? 'destructive' : 'secondary'} className="font-mono">
-                          {formatPercentile(fy.percentile_rank)}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-center">
-                        {meetsThreshold ? (
-                          <CheckCircle2 className="h-5 w-5 text-destructive mx-auto" />
+                        {isVerified ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-destructive" />
+                            <span className="text-sm font-medium text-destructive">Verified</span>
+                          </div>
                         ) : (
-                          <XCircle className="h-5 w-5 text-muted-foreground mx-auto" />
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                     </TableRow>
