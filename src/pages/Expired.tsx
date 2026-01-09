@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, Mail } from 'lucide-react';
+import outlierGovLogo from '@/assets/OutlierGOV.png';
 
 export default function Expired() {
   const { signOut } = useAuth();
@@ -14,11 +15,13 @@ export default function Expired() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       {/* Logo */}
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-          <span className="text-2xl font-bold text-primary-foreground">O</span>
-        </div>
-        <div>
+      <div className="mb-8 flex flex-col items-center gap-3">
+        <img 
+          src={outlierGovLogo} 
+          alt="OutlierGov Logo" 
+          className="h-20 w-20 rounded-xl"
+        />
+        <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground">OutlierGov</h1>
           <p className="text-sm text-muted-foreground">Healthcare Spending Analytics</p>
         </div>

@@ -23,9 +23,10 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
       }
 
       try {
+        // Check user's profile for expiration and firm_id
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('expired')
+          .select('expired, firm_id')
           .eq('id', user.id)
           .single();
 
@@ -35,7 +36,31 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
           return;
         }
 
-        setIsExpired(profile?.expired === true);
+        // Check if user is expired
+        if (profile?.expired === true) {
+          setIsExpired(true);
+          setCheckingExpired(false);
+          return;
+        }
+
+        // Check if user's firm is expired
+        if (profile?.firm_id) {
+          const { data: firm, error: firmError } = await supabase
+            .from('firms')
+            .select('expired')
+            .eq('id', profile.firm_id)
+            .single();
+
+          if (firmError) {
+            console.error('Error checking firm expired status:', firmError);
+          } else if (firm?.expired === true) {
+            setIsExpired(true);
+            setCheckingExpired(false);
+            return;
+          }
+        }
+
+        setIsExpired(false);
       } catch (err) {
         console.error('Error checking expired status:', err);
       } finally {
