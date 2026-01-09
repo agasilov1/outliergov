@@ -85,11 +85,33 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Restrictions on Use</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          <p>
+            You may not publicly represent, publish, or redistribute outputs from the Service in a manner that implies factual findings, legal conclusions, or determinations of wrongdoing. Any external use must preserve appropriate disclaimers and context.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Intellectual Property</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
             All content, software, and materials provided through the Service are owned by the Company or its licensors and are protected by applicable intellectual property laws.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Suspension and Termination</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          <p>
+            We reserve the right to suspend or terminate access to the Service at any time for violations of these Terms, misuse of outputs, or security reasons.
           </p>
         </CardContent>
       </Card>
@@ -112,6 +134,17 @@ export default function Terms() {
         <CardContent className="text-muted-foreground">
           <p>
             To the maximum extent permitted by law, the Company shall not be liable for indirect, incidental, or consequential damages arising from use of the Service.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Indemnification</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          <p>
+            You agree to indemnify and hold the Company harmless from claims arising from your misuse of the Service or violation of these Terms.
           </p>
         </CardContent>
       </Card>

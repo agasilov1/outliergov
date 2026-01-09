@@ -249,6 +249,11 @@ export default function ProviderDetail() {
 
       {/* Possible Explanations */}
       <PossibleExplanations />
+
+      {/* Watermark footer for screenshot protection */}
+      <div className="text-center text-xs text-muted-foreground py-4 border-t mt-6">
+        Statistical analysis • Public data • Not a finding of wrongdoing
+      </div>
     </div>
   );
 }

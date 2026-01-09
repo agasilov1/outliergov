@@ -77,6 +77,17 @@ export default function Privacy() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Regulatory Scope</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          <p>
+            The Service does not collect or process protected health information (PHI) as defined under HIPAA and is not a covered entity or business associate. All analyses are derived from de-identified, aggregated datasets released by public agencies.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Data Sharing</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
@@ -115,6 +126,17 @@ export default function Privacy() {
         <CardContent className="text-muted-foreground">
           <p>
             You may request access, correction, or deletion of your account information by contacting us.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Jurisdictional Rights</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">
+          <p>
+            Depending on your jurisdiction, you may have additional rights regarding your personal information. We honor applicable data protection laws and will respond to verified requests in accordance with legal requirements.
           </p>
         </CardContent>
       </Card>
