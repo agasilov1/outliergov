@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Mail, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Mail, Lock } from 'lucide-react';
+import outlierGovLogo from '@/assets/OutlierGOV.png';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
@@ -111,11 +112,13 @@ export default function Auth() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-          <span className="text-2xl font-bold text-primary-foreground">O</span>
-        </div>
-        <div>
+      <div className="mb-8 flex flex-col items-center gap-3">
+        <img 
+          src={outlierGovLogo} 
+          alt="OutlierGov Logo" 
+          className="h-20 w-20 rounded-xl"
+        />
+        <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground">OutlierGov</h1>
           <p className="text-sm text-muted-foreground">Healthcare Spending Analytics</p>
         </div>
