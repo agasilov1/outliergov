@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Clock, CheckCircle2 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ArrowLeft, Clock, CheckCircle2, Info } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { useEffect, useMemo } from 'react';
 
@@ -27,6 +28,15 @@ interface AnomalyOffline {
   peer_group_size: number | null;
   allowed_vs_peer_median: number | null;
   allowed_vs_peer_median_log: number | null;
+}
+
+interface FlagYear {
+  year: number;
+  percentile_rank: number;
+  value: number;
+  peer_median_allowed: number | null;
+  peer_group_size: number | null;
+  allowed_vs_peer_median: number | null;
 }
 
 export default function ProviderDetail() {
@@ -97,6 +107,25 @@ export default function ProviderDetail() {
 
   const yearsVerified = flagYears.filter(y => y.percentile_rank >= 0.995).length;
 
+  // Helper: Get best available peer ratio across all years
+  const bestPeerRatio = useMemo(() => {
+    const withRatio = flagYears.filter(y => y.allowed_vs_peer_median !== null);
+    if (withRatio.length === 0) return null;
+    // Return highest ratio for headline
+    return Math.max(...withRatio.map(y => y.allowed_vs_peer_median!));
+  }, [flagYears]);
+
+  // Helper: Check if peer data is available for a given row
+  const getPeerDataStatus = (row: FlagYear) => {
+    if (row.peer_group_size !== null && row.peer_group_size < 5) {
+      return { available: false, reason: 'Peer group too small (< 5 providers)' };
+    }
+    if (row.peer_median_allowed === null) {
+      return { available: false, reason: 'Peer data not available' };
+    }
+    return { available: true, reason: null };
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -164,48 +193,80 @@ export default function ProviderDetail() {
                 </p>
               )}
             </div>
-            <Badge variant="destructive" className="px-3 py-1">
-              ✓ Top 0.5% Verified
-            </Badge>
+            {/* PRIMARY BADGE: Peer ratio or fallback */}
+            {bestPeerRatio ? (
+              <Badge variant="destructive" className="px-4 py-2 text-base font-semibold">
+                {bestPeerRatio.toFixed(1)}× Peer Median
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="px-3 py-1">
+                Statistical Outlier
+              </Badge>
+            )}
           </div>
         </CardHeader>
         {flagYears.length > 0 && (
           <CardContent>
-            <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex flex-wrap gap-6 text-sm">
+              {/* PRIMARY: Peer comparison context */}
               <div>
-                <span className="text-muted-foreground">Years Verified: </span>
-                <span className="font-semibold">{yearsVerified} of {flagYears.length}</span>
+                <span className="text-muted-foreground">Specialty-State Peer Group: </span>
+                <span className="font-semibold">
+                  {provider.specialty}, {provider.state}
+                </span>
               </div>
+              <div>
+                <span className="text-muted-foreground">Peer Group Size: </span>
+                {flagYears[0]?.peer_group_size !== null ? (
+                  <span className="font-semibold">
+                    {flagYears[0].peer_group_size?.toLocaleString()} providers
+                    {flagYears[0].peer_group_size !== null && flagYears[0].peer_group_size < 5 && (
+                      <span className="text-xs text-amber-600 ml-2">(too small for ratio)</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-sm italic text-muted-foreground">Not available</span>
+                )}
+              </div>
+              
+              {/* SECONDARY: Volume context */}
               <div>
                 <span className="text-muted-foreground">Max Allowed Amount: </span>
                 <span className="font-semibold">
                   {formatCurrency(Math.max(...flagYears.map(y => y.value)))}
                 </span>
               </div>
-              {flagYears[0]?.peer_group_size && (
-                <div>
-                  <span className="text-muted-foreground">Peer Group Size: </span>
-                  <span className="font-semibold">{flagYears[0].peer_group_size.toLocaleString()} providers</span>
-                </div>
-              )}
+              <div>
+                <span className="text-muted-foreground">Years as Outlier: </span>
+                <span className="font-semibold">{yearsVerified} of {flagYears.length}</span>
+              </div>
             </div>
           </CardContent>
         )}
       </Card>
 
-      {/* Verification Statement Card */}
+      {/* Verification Statement Card - Peer-focused */}
       <Card className="border-destructive/30 bg-destructive/5">
         <CardContent className="py-4">
           <div className="flex items-start gap-3">
             <CheckCircle2 className="h-5 w-5 text-destructive mt-0.5" />
             <div>
               <h3 className="font-semibold text-destructive">
-                Verified Statistical Outlier
+                Verified Statistical Outlier — {provider.specialty}, {provider.state}
               </h3>
               <p className="text-sm mt-1">
-                This provider is a confirmed Top 0.5% statistical outlier by allowed amount 
-                within their specialty-state peer group for {yearsVerified} year(s). 
-                This is statistical variance only—not evidence of any wrongdoing.
+                {bestPeerRatio && flagYears[0]?.peer_group_size ? (
+                  <>
+                    This provider billed <strong>{bestPeerRatio.toFixed(1)}× the peer median</strong> among{' '}
+                    {flagYears[0].peer_group_size.toLocaleString()} {provider.specialty} providers in {provider.state}.
+                    This is statistical variance only—not evidence of wrongdoing.
+                  </>
+                ) : (
+                  <>
+                    This provider is a confirmed statistical outlier within their specialty-state peer group.
+                    This is statistical variance only—not evidence of any wrongdoing.
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -221,7 +282,7 @@ export default function ProviderDetail() {
               Per-Year Statistical Breakdown
             </CardTitle>
             <CardDescription>
-              Verified Top 0.5% status for each analysis year (statistical variance only)
+              Peer comparison and verification status for each analysis year
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -232,12 +293,25 @@ export default function ProviderDetail() {
                   <TableHead className="text-right">Total Allowed</TableHead>
                   <TableHead className="text-right">Peer Median</TableHead>
                   <TableHead className="text-right">vs Median</TableHead>
-                  <TableHead className="text-center">Top 0.5% (Verified)</TableHead>
+                  <TableHead className="text-center">
+                    <span className="flex items-center justify-center gap-1">
+                      Percentile
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Percentile rank within specialty-state peer group
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {flagYears.map(fy => {
                   const isVerified = fy.percentile_rank >= 0.995;
+                  const peerStatus = getPeerDataStatus(fy);
                   
                   return (
                     <TableRow key={fy.year}>
@@ -245,24 +319,34 @@ export default function ProviderDetail() {
                       <TableCell className="text-right font-mono">
                         {formatCurrency(fy.value)}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {fy.peer_median_allowed ? formatCurrency(fy.peer_median_allowed) : '—'}
+                      <TableCell className="text-right text-muted-foreground">
+                        {peerStatus.available ? (
+                          <span className="font-mono">{formatCurrency(fy.peer_median_allowed!)}</span>
+                        ) : (
+                          <span className="text-xs italic">{peerStatus.reason}</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {fy.allowed_vs_peer_median ? (
+                        {peerStatus.available ? (
                           <Badge variant="outline" className="font-mono">
-                            {fy.allowed_vs_peer_median.toFixed(1)}x
+                            {fy.allowed_vs_peer_median!.toFixed(1)}×
                           </Badge>
-                        ) : '—'}
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">{peerStatus.reason}</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {isVerified ? (
                           <div className="flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-5 w-5 text-destructive" />
-                            <span className="text-sm font-medium text-destructive">Verified</span>
+                            <CheckCircle2 className="h-4 w-4 text-destructive" />
+                            <span className="text-sm text-muted-foreground">
+                              Top {((1 - fy.percentile_rank) * 100).toFixed(1)}%
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground text-sm">
+                            Top {((1 - fy.percentile_rank) * 100).toFixed(1)}%
+                          </span>
                         )}
                       </TableCell>
                     </TableRow>
