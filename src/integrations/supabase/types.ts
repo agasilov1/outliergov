@@ -16,10 +16,15 @@ export type Database = {
     Tables: {
       anomalies_offline: {
         Row: {
+          allowed_vs_peer_median: number | null
+          allowed_vs_peer_median_log: number | null
           beneficiary_count: number | null
           created_at: string | null
           id: string
           npi: string
+          peer_group_size: number | null
+          peer_median_allowed: number | null
+          peer_p75_allowed: number | null
           percentile_rank: number | null
           provider_name: string | null
           service_count: number | null
@@ -29,10 +34,15 @@ export type Database = {
           year: number
         }
         Insert: {
+          allowed_vs_peer_median?: number | null
+          allowed_vs_peer_median_log?: number | null
           beneficiary_count?: number | null
           created_at?: string | null
           id?: string
           npi: string
+          peer_group_size?: number | null
+          peer_median_allowed?: number | null
+          peer_p75_allowed?: number | null
           percentile_rank?: number | null
           provider_name?: string | null
           service_count?: number | null
@@ -42,10 +52,15 @@ export type Database = {
           year: number
         }
         Update: {
+          allowed_vs_peer_median?: number | null
+          allowed_vs_peer_median_log?: number | null
           beneficiary_count?: number | null
           created_at?: string | null
           id?: string
           npi?: string
+          peer_group_size?: number | null
+          peer_median_allowed?: number | null
+          peer_p75_allowed?: number | null
           percentile_rank?: number | null
           provider_name?: string | null
           service_count?: number | null
