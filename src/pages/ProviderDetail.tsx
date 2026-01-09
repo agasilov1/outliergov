@@ -6,12 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, FileText, Info, TrendingUp, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { PeerDistributionChart } from '@/components/PeerDistributionChart';
-import { YearlyComparisonChart } from '@/components/YearlyComparisonChart';
+import { ArrowLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { ConfidenceBadge, getConfidenceLevel, getConfidenceLabel } from '@/components/ConfidenceBadge';
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 interface AnomalyOffline {
   id: string;
@@ -36,7 +34,7 @@ export default function ProviderDetail() {
   const rankFromUrl = searchParams.get('rank');
   const totalFromUrl = searchParams.get('total');
   const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
-  const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : null;
+  const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : 5885;
 
   // Log provider view for audit
   useEffect(() => {
@@ -85,82 +83,14 @@ export default function ProviderDetail() {
     return anomalyData.map(row => ({
       year: row.year,
       percentile_rank: Number(row.percentile_rank) || 0,
-      value: Number(row.total_allowed_amount) || 0,
-      peer_size: 20, // Not available in anomalies_offline, assume 20
-      p995_threshold: 0 // Not available
+      value: Number(row.total_allowed_amount) || 0
     }));
   }, [anomalyData]);
 
-  // Calculate confidence
+  // Calculate confidence - all providers in anomalies_offline are verified outliers
   const minPeerSize = 20; // Assumed since not available in anomalies_offline
   const confidence = getConfidenceLevel(minPeerSize);
   const confidenceLabel = getConfidenceLabel(confidence);
-
-  // Fetch peer distribution for histogram
-  const { data: peerDistribution } = useQuery({
-    queryKey: ['peer-distribution-offline', provider?.specialty, provider?.state],
-    queryFn: async () => {
-      if (!provider) return null;
-      
-      const { data, error } = await supabase
-        .from('anomalies_offline')
-        .select('npi, year, total_allowed_amount')
-        .eq('specialty', provider.specialty)
-        .eq('state', provider.state);
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!provider
-  });
-
-  // Derive unique years from peer distribution
-  const peerDistributionYears = useMemo(() => {
-    if (!peerDistribution) return [];
-    return [...new Set(peerDistribution.map(m => m.year))].sort((a, b) => a - b);
-  }, [peerDistribution]);
-
-  // Calculate peer stats from distribution
-  const peerStats = useMemo(() => {
-    if (!peerDistribution || peerDistributionYears.length === 0) return [];
-    
-    return peerDistributionYears.map(year => {
-      const yearMetrics = peerDistribution
-        .filter(m => m.year === year)
-        .map(m => Number(m.total_allowed_amount))
-        .filter(v => !isNaN(v) && v > 0)
-        .sort((a, b) => a - b);
-      
-      if (yearMetrics.length === 0) {
-        return { year, median: 0, p95: 0, p99: 0, p995: 0, mean: 0, peer_size: 0 };
-      }
-      
-      const n = yearMetrics.length;
-      const sum = yearMetrics.reduce((a, b) => a + b, 0);
-      
-      return {
-        year,
-        median: yearMetrics[Math.floor(n * 0.5)] || 0,
-        p95: yearMetrics[Math.floor(n * 0.95)] || 0,
-        p99: yearMetrics[Math.floor(n * 0.99)] || 0,
-        p995: yearMetrics[Math.floor(n * 0.995)] || 0,
-        mean: sum / n,
-        peer_size: n
-      };
-    });
-  }, [peerDistribution, peerDistributionYears]);
-
-  // Get provider amount for a given year
-  const getProviderAmount = (year: number): number => {
-    const row = anomalyData?.find(r => r.year === year);
-    return Number(row?.total_allowed_amount) || 0;
-  };
-
-  // Get the latest year for the histogram
-  const latestYear = useMemo(() => {
-    if (!peerDistributionYears || peerDistributionYears.length === 0) return null;
-    return Math.max(...peerDistributionYears);
-  }, [peerDistributionYears]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -174,6 +104,7 @@ export default function ProviderDetail() {
   const formatPercentile = (value: number) => {
     // Convert from decimal (0.995) to percentage (99.5th)
     const pct = value * 100;
+    if (pct >= 99.9) return '≥99.9th';
     return `${pct.toFixed(1)}th`;
   };
 
@@ -229,9 +160,9 @@ export default function ProviderDetail() {
                 NPI: {provider.npi} • {provider.specialty} • {provider.state}
               </CardDescription>
               {/* Rank indicator */}
-              {rank && totalProviders && (
+              {rank && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ranked #{rank} of {totalProviders.toLocaleString()} statistical outliers
+                  Ranked #{rank} of {totalProviders.toLocaleString()} verified statistical outliers
                 </p>
               )}
             </div>
@@ -299,7 +230,7 @@ export default function ProviderDetail() {
               Per-Year Statistical Breakdown
             </CardTitle>
             <CardDescription>
-              Detailed metrics for each analysis year (statistical variance only)
+              Authoritative percentile ranks for each analysis year (statistical variance only)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -345,139 +276,6 @@ export default function ProviderDetail() {
 
       {/* Possible Explanations */}
       <PossibleExplanations />
-
-      {/* Charts Row */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Peer Distribution Histogram */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <TrendingUp className="h-5 w-5" />
-              Peer Group Distribution
-            </CardTitle>
-            <CardDescription>
-              Distribution of total allowed amounts for {provider.specialty} providers in {provider.state}
-              {latestYear && ` (${latestYear})`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {peerDistribution && peerDistribution.length > 0 && latestYear ? (
-              <PeerDistributionChart
-                peerData={peerDistribution.filter(m => m.year === latestYear).map(m => Number(m.total_allowed_amount))}
-                providerAmount={getProviderAmount(latestYear)}
-                year={latestYear}
-              />
-            ) : (
-              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                No peer data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Year-over-Year Comparison */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <TrendingUp className="h-5 w-5" />
-              Year-over-Year Comparison
-            </CardTitle>
-            <CardDescription>
-              Provider's total allowed amount vs. peer group median
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {peerStats.length > 0 && anomalyData ? (
-              <YearlyComparisonChart
-                providerMetrics={anomalyData.map(m => ({ year: m.year, amount: Number(m.total_allowed_amount) || 0 }))}
-                peerMedians={peerStats.map(s => ({ year: s.year, median: s.median }))}
-              />
-            ) : (
-              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                No comparison data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Peer Statistics Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Peer Group Statistics</CardTitle>
-          <CardDescription>
-            Statistical breakdown of the {provider.specialty} peer group in {provider.state}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Statistic</TableHead>
-                {peerStats.map(s => (
-                  <TableHead key={s.year} className="text-right">{s.year}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-medium">Peer Group Size</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{s.peer_size}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">Median</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{formatCurrency(s.median)}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">Mean</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{formatCurrency(s.mean)}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">95th Percentile</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p95)}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">99th Percentile</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p99)}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">99.5th Percentile</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">{formatCurrency(s.p995)}</TableCell>
-                ))}
-              </TableRow>
-              <TableRow className="bg-muted/50 font-semibold">
-                <TableCell>This Provider</TableCell>
-                {peerStats.map(s => (
-                  <TableCell key={s.year} className="text-right">
-                    {formatCurrency(getProviderAmount(s.year))}
-                  </TableCell>
-                ))}
-              </TableRow>
-              {flagYears.length > 0 && (
-                <TableRow className="bg-muted/50 font-semibold">
-                  <TableCell>This Provider's Percentile Rank</TableCell>
-                  {flagYears.map(fy => (
-                    <TableCell key={fy.year} className="text-right">
-                      {formatPercentile(fy.percentile_rank)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }

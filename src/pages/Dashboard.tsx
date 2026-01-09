@@ -166,6 +166,7 @@ export default function Dashboard() {
   const formatPercentile = (value: number) => {
     // Convert from decimal (0.995) to percentage (99.5th)
     const pct = value * 100;
+    if (pct >= 99.9) return '≥99.9th';
     return `${pct.toFixed(1)}th`;
   };
 
