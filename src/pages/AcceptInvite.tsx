@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
 
 type InviteStatus = 'loading' | 'success' | 'error';
 
@@ -13,7 +12,9 @@ interface InviteResult {
   email?: string;
   role?: string;
   action_link?: string;
+  email_sent?: boolean;
   error?: string;
+  message?: string;
 }
 
 export default function AcceptInvite() {
@@ -21,6 +22,7 @@ export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<InviteStatus>('loading');
   const [message, setMessage] = useState('');
+  const [email, setEmail] = useState('');
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -54,17 +56,23 @@ export default function AcceptInvite() {
         }
 
         setStatus('success');
-        setMessage(`Welcome! Your account has been created with ${result.role} access.`);
+        setEmail(result.email || '');
 
-        // If we got an action link, redirect to it
+        // If we got an action link (existing user), redirect to it
         if (result.action_link) {
           setRedirecting(true);
-          toast.success('Account created! Signing you in...');
+          setMessage('User already exists. Signing you in...');
+          toast.success('Signing you in...');
           
-          // Small delay then redirect to the magic link
           setTimeout(() => {
             window.location.href = result.action_link!;
           }, 1500);
+        } else if (result.email_sent) {
+          // New user - email sent for password setup
+          setMessage(result.message || 'Check your email to set your password and complete signup.');
+          toast.success('Check your email!');
+        } else {
+          setMessage(`Welcome! Your account has been created with ${result.role} access.`);
         }
       } catch (error) {
         console.error('Error accepting invite:', error);
@@ -97,7 +105,7 @@ export default function AcceptInvite() {
           </CardTitle>
           <CardDescription>
             {status === 'loading' && 'Please wait while we set up your account'}
-            {status === 'success' && 'Your account is ready'}
+            {status === 'success' && (redirecting ? 'Signing you in...' : 'Check your email to complete setup')}
             {status === 'error' && 'There was a problem with your invitation'}
           </CardDescription>
         </CardHeader>
@@ -108,14 +116,25 @@ export default function AcceptInvite() {
           
           {status === 'success' && (
             <>
-              <CheckCircle className="h-12 w-12 text-green-500" />
-              <p className="text-center text-muted-foreground">{message}</p>
               {redirecting ? (
-                <p className="text-sm text-muted-foreground">Redirecting...</p>
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
               ) : (
-                <Button onClick={() => navigate('/auth')}>
-                  Go to Sign In
-                </Button>
+                <>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                    <Mail className="h-8 w-8 text-green-600" />
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className="text-muted-foreground">{message}</p>
+                    {email && (
+                      <p className="font-medium">
+                        Email sent to: <span className="text-primary">{email}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-center text-sm text-muted-foreground">
+                    <p>Didn't receive the email? Check your spam folder or contact support.</p>
+                  </div>
+                </>
               )}
             </>
           )}

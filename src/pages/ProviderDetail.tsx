@@ -151,7 +151,7 @@ export default function ProviderDetail() {
               {/* Rank indicator */}
               {rank && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ranked #{rank} of {totalProviders.toLocaleString()} verified statistical outliers
+                  Ranked #{rank} by Medicare billing volume among {totalProviders.toLocaleString()} verified outliers
                 </p>
               )}
             </div>

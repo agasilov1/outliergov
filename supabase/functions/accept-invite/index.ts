@@ -65,89 +65,131 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Generate a magic link for the user
-    const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: invitation.email,
-      options: {
-        redirectTo: `${req.headers.get('origin') || Deno.env.get('SITE_URL') || 'http://localhost:5173'}/`
+    const origin = req.headers.get('origin') || Deno.env.get('SITE_URL') || 'http://localhost:5173';
+
+    // Use inviteUserByEmail to send a password setup email
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      invitation.email,
+      {
+        redirectTo: `${origin}/auth/callback`
       }
-    });
+    );
 
-    if (magicLinkError) {
-      console.error('Error generating magic link:', magicLinkError);
+    if (inviteError) {
+      console.error('Error inviting user:', inviteError);
+      
+      // If user already exists, generate a magic link instead
+      if (inviteError.message?.includes('already been registered')) {
+        const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: invitation.email,
+          options: {
+            redirectTo: `${origin}/`
+          }
+        });
+
+        if (magicLinkError) {
+          return new Response(
+            JSON.stringify({ error: 'Failed to create authentication link' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Get user ID
+        const newUserId = magicLinkData.user?.id;
+        if (newUserId) {
+          // Assign role
+          await supabaseAdmin.from('user_roles').upsert({
+            user_id: newUserId,
+            role: invitation.role
+          }, { onConflict: 'user_id,role' });
+
+          // Update profile with firm_id
+          if (invitation.firm_id) {
+            await supabaseAdmin.from('profiles').update({ firm_id: invitation.firm_id }).eq('id', newUserId);
+          }
+
+          // Mark invitation as accepted
+          await supabaseAdmin.from('invitations').update({
+            accepted_at: new Date().toISOString(),
+            accepted_by: newUserId
+          }).eq('id', invitation.id);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            email: invitation.email,
+            role: invitation.role,
+            action_link: magicLinkData.properties?.action_link,
+            message: 'User already exists. Signing you in...'
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: 'Failed to create authentication link' }),
+        JSON.stringify({ error: 'Failed to create user invitation' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get the user ID from the generated link data
-    const newUserId = magicLinkData.user?.id;
+    // Get the user ID from invite data
+    const newUserId = inviteData.user?.id;
 
-    if (!newUserId) {
-      console.error('No user ID returned from magic link generation');
-      return new Response(
-        JSON.stringify({ error: 'Failed to create user' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (newUserId) {
+      // Assign the role from the invitation
+      const { error: roleError } = await supabaseAdmin
+        .from('user_roles')
+        .insert({
+          user_id: newUserId,
+          role: invitation.role
+        });
 
-    // Assign the role from the invitation
-    const { error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .insert({
-        user_id: newUserId,
-        role: invitation.role
-      });
+      if (roleError) {
+        console.error('Error assigning role:', roleError);
+      }
 
-    if (roleError) {
-      console.error('Error assigning role:', roleError);
-      // Continue anyway - user is created, role can be assigned manually
-    }
+      // Create or update profile with firm_id if provided
+      const profileData: { id: string; email: string; firm_id?: string } = {
+        id: newUserId,
+        email: invitation.email
+      };
+      
+      if (invitation.firm_id) {
+        profileData.firm_id = invitation.firm_id;
+      }
 
-    // Update profile with firm_id if provided
-    if (invitation.firm_id) {
+      await supabaseAdmin.from('profiles').upsert(profileData, { onConflict: 'id' });
+
+      // Mark invitation as accepted
       await supabaseAdmin
-        .from('profiles')
-        .update({ firm_id: invitation.firm_id })
-        .eq('id', newUserId);
+        .from('invitations')
+        .update({
+          accepted_at: new Date().toISOString(),
+          accepted_by: newUserId
+        })
+        .eq('id', invitation.id);
+
+      // Log to audit_log
+      await supabaseAdmin.from('audit_log').insert({
+        user_id: newUserId,
+        action: 'invite_accepted',
+        entity_type: 'invitation',
+        entity_id: invitation.id,
+        metadata: { email: invitation.email, role: invitation.role }
+      });
     }
 
-    // Mark invitation as accepted
-    await supabaseAdmin
-      .from('invitations')
-      .update({
-        accepted_at: new Date().toISOString(),
-        accepted_by: newUserId
-      })
-      .eq('id', invitation.id);
+    console.log('Invitation accepted, email sent to:', invitation.email);
 
-    // Log to audit_log
-    await supabaseAdmin.from('audit_log').insert({
-      user_id: newUserId,
-      action: 'invite_accepted',
-      entity_type: 'invitation',
-      entity_id: invitation.id,
-      metadata: { email: invitation.email, role: invitation.role }
-    });
-
-    console.log('Invitation accepted successfully:', { 
-      email: invitation.email, 
-      role: invitation.role, 
-      userId: newUserId 
-    });
-
-    // Extract the token from the magic link URL for client-side auth
-    const actionLink = magicLinkData.properties?.action_link;
-    
     return new Response(
       JSON.stringify({
         success: true,
         email: invitation.email,
         role: invitation.role,
-        action_link: actionLink,
-        message: 'Invitation accepted. Please use the magic link to sign in.'
+        email_sent: true,
+        message: 'Invitation accepted! Check your email to set your password and complete signup.'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
