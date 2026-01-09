@@ -348,18 +348,27 @@ export type Database = {
       firms: {
         Row: {
           created_at: string | null
+          expired: boolean | null
+          expired_at: string | null
+          expired_reason: string | null
           id: string
           name: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          expired?: boolean | null
+          expired_at?: string | null
+          expired_reason?: string | null
           id?: string
           name: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          expired?: boolean | null
+          expired_at?: string | null
+          expired_reason?: string | null
           id?: string
           name?: string
           updated_at?: string | null

@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, UserX, UserCheck, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -27,6 +27,9 @@ interface Firm {
   id: string;
   name: string;
   created_at?: string;
+  expired?: boolean;
+  expired_reason?: string | null;
+  user_count?: number;
 }
 
 interface ComputeRun {
@@ -81,8 +84,15 @@ export default function Admin() {
   const [newFirmName, setNewFirmName] = useState('');
   const [createFirmLoading, setCreateFirmLoading] = useState(false);
 
-  // User expiration state
+  // User action states
   const [expiringUserId, setExpiringUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Firm action states
+  const [expiringFirmId, setExpiringFirmId] = useState<string | null>(null);
+  const [deletingFirmId, setDeletingFirmId] = useState<string | null>(null);
+  const [firmToDelete, setFirmToDelete] = useState<Firm | null>(null);
 
   // Data state
   const [users, setUsers] = useState<User[]>([]);
@@ -98,8 +108,28 @@ export default function Admin() {
     
     setLoadingData(true);
     try {
-      const { data: firmsData } = await supabase.from('firms').select('id, name, created_at').order('name');
-      setFirms(firmsData || []);
+      // Load firms with expiration data
+      const { data: firmsData } = await supabase
+        .from('firms')
+        .select('id, name, created_at, expired, expired_reason')
+        .order('name');
+      
+      // Count users per firm
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('firm_id');
+      
+      const firmUserCounts: Record<string, number> = {};
+      profilesData?.forEach(p => {
+        if (p.firm_id) {
+          firmUserCounts[p.firm_id] = (firmUserCounts[p.firm_id] || 0) + 1;
+        }
+      });
+
+      setFirms((firmsData || []).map(f => ({
+        ...f,
+        user_count: firmUserCounts[f.id] || 0
+      })));
 
       const { data, error } = await supabase.functions.invoke('list-users');
       if (!error) setUsers(data?.users || []);
@@ -213,6 +243,85 @@ export default function Admin() {
     }
   }
 
+  async function handleDeleteUser() {
+    if (!userToDelete) return;
+    
+    setDeletingUserId(userToDelete.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: userToDelete.id }
+      });
+      
+      if (error || data?.error) throw new Error(data?.error || 'Failed to delete user');
+      
+      toast.success(`User ${userToDelete.email} deleted`);
+      setUserToDelete(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
+
+  async function handleToggleFirmExpired(firmId: string, currentExpired: boolean) {
+    setExpiringFirmId(firmId);
+    try {
+      const { error } = await supabase
+        .from('firms')
+        .update({ 
+          expired: !currentExpired,
+          expired_reason: !currentExpired ? 'Firm access expired by admin' : null,
+          expired_at: !currentExpired ? new Date().toISOString() : null
+        })
+        .eq('id', firmId);
+      
+      if (error) throw error;
+      toast.success(currentExpired ? 'Firm access restored' : 'Firm access expired');
+      loadData();
+    } catch (error) {
+      console.error('Error updating firm:', error);
+      toast.error('Failed to update firm status');
+    } finally {
+      setExpiringFirmId(null);
+    }
+  }
+
+  async function handleDeleteFirm() {
+    if (!firmToDelete) return;
+    
+    setDeletingFirmId(firmToDelete.id);
+    try {
+      // First, unassign users from this firm
+      const { error: unassignError } = await supabase
+        .from('profiles')
+        .update({ firm_id: null })
+        .eq('firm_id', firmToDelete.id);
+      
+      if (unassignError) {
+        console.error('Error unassigning users:', unassignError);
+      }
+      
+      // Then delete the firm
+      const { error } = await supabase
+        .from('firms')
+        .delete()
+        .eq('id', firmToDelete.id);
+      
+      if (error) throw error;
+      
+      toast.success(`Firm "${firmToDelete.name}" deleted`);
+      setFirmToDelete(null);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting firm:', error);
+      toast.error('Failed to delete firm');
+    } finally {
+      setDeletingFirmId(null);
+    }
+  }
+
   async function handleRecomputeAnomalies() {
     setRecomputeLoading(true);
     try {
@@ -315,6 +424,94 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete User Confirmation Modal */}
+      <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete User
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this user? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {userToDelete && (
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+              <p className="font-medium">{userToDelete.email}</p>
+              {userToDelete.full_name && <p className="text-sm text-muted-foreground">{userToDelete.full_name}</p>}
+              {userToDelete.firm_name && <p className="text-sm text-muted-foreground">Firm: {userToDelete.firm_name}</p>}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserToDelete(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteUser}
+              disabled={deletingUserId === userToDelete?.id}
+            >
+              {deletingUserId === userToDelete?.id ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Firm Confirmation Modal */}
+      <Dialog open={!!firmToDelete} onOpenChange={(open) => !open && setFirmToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Firm
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this firm? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {firmToDelete && (
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/50 p-3">
+                <p className="font-medium">{firmToDelete.name}</p>
+                {firmToDelete.user_count && firmToDelete.user_count > 0 && (
+                  <p className="text-sm text-muted-foreground">{firmToDelete.user_count} user(s) assigned</p>
+                )}
+              </div>
+              
+              {firmToDelete.user_count && firmToDelete.user_count > 0 && (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>This firm has {firmToDelete.user_count} user(s). They will be unassigned from the firm but their accounts will remain.</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFirmToDelete(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteFirm}
+              disabled={deletingFirmId === firmToDelete?.id}
+            >
+              {deletingFirmId === firmToDelete?.id ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete Firm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-3xl font-bold tracking-tight">Admin Panel</h1>
@@ -388,7 +585,7 @@ export default function Admin() {
                         <SelectValue placeholder="Select firm..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {firms.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                        {firms.filter(f => !f.expired).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -453,20 +650,31 @@ export default function Admin() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{formatDate(u.created_at)}</TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant={u.expired ? 'outline' : 'destructive'} 
-                            size="sm" 
-                            onClick={() => handleToggleExpired(u.id, u.expired || false)} 
-                            disabled={expiringUserId === u.id}
-                          >
-                            {expiringUserId === u.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : u.expired ? (
-                              <><UserCheck className="h-4 w-4 mr-1" />Restore</>
-                            ) : (
-                              <><UserX className="h-4 w-4 mr-1" />Expire</>
-                            )}
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant={u.expired ? 'outline' : 'secondary'} 
+                              size="sm" 
+                              onClick={() => handleToggleExpired(u.id, u.expired || false)} 
+                              disabled={expiringUserId === u.id}
+                            >
+                              {expiringUserId === u.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : u.expired ? (
+                                <><UserCheck className="h-4 w-4 mr-1" />Restore</>
+                              ) : (
+                                <><UserX className="h-4 w-4 mr-1" />Expire</>
+                              )}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setUserToDelete(u)}
+                              disabled={u.id === user?.id}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -479,7 +687,7 @@ export default function Admin() {
       )}
 
       {activeSection === 'firms' && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
           <Card>
             <CardHeader><CardTitle>Create New Firm</CardTitle><CardDescription>Add a new firm to the platform.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
@@ -493,19 +701,65 @@ export default function Admin() {
               </Button>
             </CardContent>
           </Card>
+          
           <Card>
-            <CardHeader><CardTitle>Existing Firms</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>All Firms</CardTitle>
+              <CardDescription>Manage firm access. Expired firms block all their users from the platform.</CardDescription>
+            </CardHeader>
             <CardContent>
               {loadingData ? <Loader2 className="mx-auto h-6 w-6 animate-spin" /> : firms.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">No firms created yet</p>
               ) : (
                 <Table>
-                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Users</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {firms.map(f => (
-                      <TableRow key={f.id}>
+                      <TableRow key={f.id} className={f.expired ? 'opacity-60' : ''}>
                         <TableCell className="font-medium">{f.name}</TableCell>
+                        <TableCell>{f.user_count || 0}</TableCell>
+                        <TableCell>
+                          {f.expired ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-600">Expired</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-green-600 border-green-600">Active</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{f.created_at ? formatDate(f.created_at) : '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant={f.expired ? 'outline' : 'secondary'} 
+                              size="sm" 
+                              onClick={() => handleToggleFirmExpired(f.id, f.expired || false)} 
+                              disabled={expiringFirmId === f.id}
+                            >
+                              {expiringFirmId === f.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : f.expired ? (
+                                <><CheckCircle2 className="h-4 w-4 mr-1" />Restore</>
+                              ) : (
+                                <><XCircle className="h-4 w-4 mr-1" />Expire</>
+                              )}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setFirmToDelete(f)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
