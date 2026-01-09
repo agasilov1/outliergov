@@ -76,10 +76,10 @@ Deno.serve(async (req) => {
       .from('user_roles')
       .select('user_id, role');
 
-    // Get all profiles with firm info
+    // Get all profiles with firm info and expired status
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, firm_id');
+      .select('id, full_name, firm_id, expired, expired_reason');
 
     // Get all firms for lookup
     const { data: firms } = await supabaseAdmin
@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
         roles: userRoles,
         firm_name: firmName,
         created_at: u.created_at,
-        last_sign_in_at: u.last_sign_in_at
+        last_sign_in_at: u.last_sign_in_at,
+        expired: profile?.expired ?? false,
+        expired_reason: profile?.expired_reason ?? null,
       };
     });
 

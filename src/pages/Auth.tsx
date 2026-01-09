@@ -80,7 +80,7 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -92,6 +92,35 @@ export default function Auth() {
           toast.error(error.message);
         }
         return;
+      }
+
+      // Check if user or their firm is expired
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('expired, firm_id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile?.expired === true) {
+          await supabase.auth.signOut();
+          toast.error('Your access has expired. Please contact an administrator.');
+          return;
+        }
+
+        if (profile?.firm_id) {
+          const { data: firm } = await supabase
+            .from('firms')
+            .select('expired')
+            .eq('id', profile.firm_id)
+            .single();
+
+          if (firm?.expired === true) {
+            await supabase.auth.signOut();
+            toast.error("Your firm's access has expired. Please contact an administrator.");
+            return;
+          }
+        }
       }
 
       toast.success('Signed in successfully');
