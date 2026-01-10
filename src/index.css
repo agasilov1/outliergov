@@ -152,3 +152,50 @@
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
 }
+
+/* Print styles for PDF export */
+@media print {
+  /* Hide non-essential elements */
+  nav,
+  .sidebar,
+  .no-print,
+  [data-sidebar],
+  button:not(.print-visible) {
+    display: none !important;
+  }
+
+  /* Ensure good page breaks */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  /* Clean up the layout for print */
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Show full content */
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 20px !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure cards print nicely */
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  /* Make sure tables don't break awkwardly */
+  table {
+    page-break-inside: avoid;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+}
