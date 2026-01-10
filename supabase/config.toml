@@ -1,28 +1,28 @@
 project_id = "tuhfkanamlxzokimvofd"
 
-# Admin functions - require JWT at gateway level
+# All functions use in-code JWT validation (required for Lovable Cloud signing-keys)
+# JWT verification happens inside each function using getUser() and role checks
 [functions.generate-invite]
-verify_jwt = true
+verify_jwt = false
 
 [functions.list-users]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.delete-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.seed-synthetic-data]
-verify_jwt = true
+verify_jwt = false
 
 [functions.recompute-anomalies]
-verify_jwt = true
+verify_jwt = false
 
 [functions.compute-peer-stats]
-verify_jwt = true
+verify_jwt = false
 
-# Public/ingestion functions - keep JWT verification disabled
 [functions.accept-invite]
 verify_jwt = false
 
