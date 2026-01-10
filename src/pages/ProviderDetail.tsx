@@ -5,11 +5,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Clock, CheckCircle2, Info } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface AnomalyOffline {
   id: string;
@@ -45,6 +46,11 @@ export default function ProviderDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{npi: string, provider_name: string | null, specialty: string | null}[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
   // Get rank from URL params
   const rankFromUrl = searchParams.get('rank');
   const totalFromUrl = searchParams.get('total');
@@ -64,6 +70,35 @@ export default function ProviderDetail() {
       });
     }
   }, [npi, user]);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from('anomalies_offline')
+        .select('npi, provider_name, specialty')
+        .or(`provider_name.ilike.%${searchQuery}%,npi.ilike.%${searchQuery}%`)
+        .limit(20);
+
+      // Dedupe by NPI
+      const unique = [...new Map(data?.map(d => [d.npi, d]) || []).values()];
+      setSearchResults(unique);
+      setShowSearchResults(true);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  // Export PDF handler
+  const handleExportPDF = () => {
+    window.print();
+  };
 
   // Fetch anomaly data from anomalies_offline
   const { data: anomalyData, isLoading } = useQuery({
@@ -168,13 +203,45 @@ export default function ProviderDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with back button */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 print-container">
+      {/* Header with back button and search */}
+      <div className="flex items-center justify-between gap-4 no-print">
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
         </Button>
+
+        {/* Search bar */}
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search provider name or NPI..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+            onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+            className="pl-9"
+          />
+          {/* Dropdown results */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
+              {searchResults.map(r => (
+                <div
+                  key={r.npi}
+                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                  onMouseDown={() => {
+                    navigate(`/provider/${r.npi}`);
+                    setShowSearchResults(false);
+                    setSearchQuery('');
+                  }}
+                >
+                  <div className="font-medium">{r.provider_name || `NPI ${r.npi}`}</div>
+                  <div className="text-xs text-muted-foreground">{r.specialty} • NPI: {r.npi}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Provider Header Card */}
@@ -193,16 +260,23 @@ export default function ProviderDetail() {
                 </p>
               )}
             </div>
-            {/* PRIMARY BADGE: Peer ratio or fallback */}
-            {bestPeerRatio ? (
-              <Badge variant="destructive" className="px-4 py-2 text-base font-semibold">
-                {bestPeerRatio.toFixed(1)}× Peer Median
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="px-3 py-1">
-                Statistical Outlier
-              </Badge>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Export PDF button */}
+              <Button variant="outline" size="sm" onClick={handleExportPDF} className="no-print">
+                <Download className="mr-2 h-4 w-4" />
+                Export PDF
+              </Button>
+              {/* PRIMARY BADGE: Peer ratio or fallback */}
+              {bestPeerRatio ? (
+                <Badge variant="destructive" className="px-4 py-2 text-base font-semibold">
+                  {bestPeerRatio.toFixed(1)}× Peer Median
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="px-3 py-1">
+                  Statistical Outlier
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         {flagYears.length > 0 && (
