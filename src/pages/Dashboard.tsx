@@ -75,6 +75,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   
   // Filter state
+  const [searchQuery, setSearchQuery] = useState('');
   const [stateFilter, setStateFilter] = useState<string[]>([]);
   const [specialtyFilter, setSpecialtyFilter] = useState<string[]>([]);
   const [excludeInstitutional, setExcludeInstitutional] = useState(true); // Default ON
@@ -201,6 +202,14 @@ export default function Dashboard() {
   // Apply filters
   const filteredProviders = useMemo(() => {
     return rankedProviders.filter(p => {
+      // Search filter - check name or NPI
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = p.provider_name.toLowerCase().includes(query);
+        const matchesNpi = p.npi.includes(query);
+        if (!matchesName && !matchesNpi) return false;
+      }
+      
       // Institutional filter (default ON - excludes institutional entities)
       if (excludeInstitutional) {
         const specialtyLower = p.specialty.toLowerCase();
@@ -212,7 +221,7 @@ export default function Dashboard() {
       if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.specialty)) return false;
       return true;
     });
-  }, [rankedProviders, stateFilter, specialtyFilter, excludeInstitutional]);
+  }, [rankedProviders, searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProviders.length / ITEMS_PER_PAGE);
@@ -224,7 +233,7 @@ export default function Dashboard() {
   // Reset to page 1 when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [stateFilter, specialtyFilter, excludeInstitutional]);
+  }, [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
 
   // Derive unique years from anomalies_offline
   const uniqueYears = useMemo(() => {
@@ -265,6 +274,7 @@ export default function Dashboard() {
   };
 
   const handleClearAllFilters = () => {
+    setSearchQuery('');
     setStateFilter([]);
     setSpecialtyFilter([]);
     setExcludeInstitutional(true); // Reset to default ON
@@ -400,6 +410,8 @@ export default function Dashboard() {
             filteredCount={filteredProviders.length}
             excludeInstitutional={excludeInstitutional}
             onExcludeInstitutionalChange={setExcludeInstitutional}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
 
           {/* Table */}

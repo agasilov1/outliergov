@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronDown, X, Filter } from 'lucide-react';
+import { ChevronDown, X, Filter, Search } from 'lucide-react';
 
 interface ProviderFiltersProps {
   states: string[];
@@ -21,6 +21,8 @@ interface ProviderFiltersProps {
   filteredCount: number;
   excludeInstitutional: boolean;
   onExcludeInstitutionalChange: (value: boolean) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 interface MultiSelectFilterProps {
@@ -123,8 +125,11 @@ export function ProviderFilters({
   filteredCount,
   excludeInstitutional,
   onExcludeInstitutionalChange,
+  searchQuery,
+  onSearchChange,
 }: ProviderFiltersProps) {
   const hasActiveFilters = 
+    searchQuery.trim() !== '' ||
     selectedStates.length > 0 || 
     selectedSpecialties.length > 0 ||
     !excludeInstitutional;
@@ -132,6 +137,17 @@ export function ProviderFilters({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
+        {/* Search input */}
+        <div className="relative flex-1 max-w-xs min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search name or NPI..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
           <span>Filters:</span>
