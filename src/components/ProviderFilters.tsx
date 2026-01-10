@@ -129,7 +129,7 @@ export function ProviderFilters({
   onSearchChange,
 }: ProviderFiltersProps) {
   const hasActiveFilters = 
-    searchQuery.trim() !== '' ||
+    (searchQuery ?? '').trim() !== '' ||
     selectedStates.length > 0 || 
     selectedSpecialties.length > 0 ||
     !excludeInstitutional;
@@ -142,7 +142,7 @@ export function ProviderFilters({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search name or NPI..."
-            value={searchQuery}
+            value={searchQuery ?? ''}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-9 h-9"
           />
