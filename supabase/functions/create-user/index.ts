@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreflightSafe } from '../_shared/cors.ts';
 
 interface CreateUserRequest {
   email: string;
@@ -43,9 +39,10 @@ function generateStrongPassword(): string {
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCorsPreflightSafe(req);
+  if (corsResponse) return corsResponse;
+
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
   try {
     // Get authorization header
@@ -131,9 +128,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Generate strong password
+    // Generate strong password - DO NOT LOG THE PASSWORD
     const generatedPassword = generateStrongPassword();
-    console.log('Generated password for new user:', email);
+    console.log('Creating user with temporary password:', email);
 
     // Create the user via admin API
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -198,19 +195,30 @@ Deno.serve(async (req) => {
 
     console.log('User creation complete:', { email, role, userId: newUser.user.id });
 
+    // Return password for one-time admin display with security headers
     return new Response(
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
         email: newUser.user.email,
         generated_password: generatedPassword,
-        message: 'User created successfully. Share this password with the user - it will not be shown again.'
+        message: 'User created successfully. Share this password securely - it will not be shown again.',
+        warning: 'Do not store or log this password.'
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        } 
+      }
     );
 
   } catch (error) {
     console.error('Unexpected error:', error);
+    const corsHeaders = getCorsHeaders(req.headers.get('origin'));
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

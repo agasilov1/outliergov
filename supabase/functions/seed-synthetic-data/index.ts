@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreflightSafe } from '../_shared/cors.ts';
 
 // Deterministic seeded random number generator (mulberry32)
 function mulberry32(seed: number) {
@@ -124,9 +120,11 @@ function selectWeighted(rand: () => number, items: string[], weights: Record<str
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const corsResponse = handleCorsPreflightSafe(req);
+  if (corsResponse) return corsResponse;
+
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
   try {
     const supabaseAdmin = createClient(
@@ -479,6 +477,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in seed-synthetic-data:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const corsHeaders = getCorsHeaders(req.headers.get('origin'));
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

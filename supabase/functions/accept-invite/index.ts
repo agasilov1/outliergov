@@ -1,15 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreflightSafe } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCorsPreflightSafe(req);
+  if (corsResponse) return corsResponse;
+
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
   try {
     // Get token from query params or body
@@ -78,51 +75,56 @@ Deno.serve(async (req) => {
     if (inviteError) {
       console.error('Error inviting user:', inviteError);
       
-      // If user already exists, generate a magic link instead
+      // If user already exists, send magic link via email instead of returning it
       if (inviteError.message?.includes('already been registered')) {
-        const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'magiclink',
+        // Send magic link via email (OTP flow) - do NOT return the link
+        const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
           email: invitation.email,
           options: {
-            redirectTo: `${origin}/`
+            shouldCreateUser: false,
+            emailRedirectTo: `${origin}/`
           }
         });
 
-        if (magicLinkError) {
+        if (otpError) {
+          console.error('Error sending magic link email:', otpError);
           return new Response(
-            JSON.stringify({ error: 'Failed to create authentication link' }),
+            JSON.stringify({ error: 'Failed to send authentication email' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Get user ID
-        const newUserId = magicLinkData.user?.id;
-        if (newUserId) {
+        // Get user ID for role assignment
+        const { data: existingUserData } = await supabaseAdmin.auth.admin.listUsers();
+        const existingUser = existingUserData?.users?.find(u => u.email === invitation.email);
+        
+        if (existingUser) {
           // Assign role
           await supabaseAdmin.from('user_roles').upsert({
-            user_id: newUserId,
+            user_id: existingUser.id,
             role: invitation.role
           }, { onConflict: 'user_id,role' });
 
           // Update profile with firm_id
           if (invitation.firm_id) {
-            await supabaseAdmin.from('profiles').update({ firm_id: invitation.firm_id }).eq('id', newUserId);
+            await supabaseAdmin.from('profiles').update({ firm_id: invitation.firm_id }).eq('id', existingUser.id);
           }
 
           // Mark invitation as accepted
           await supabaseAdmin.from('invitations').update({
             accepted_at: new Date().toISOString(),
-            accepted_by: newUserId
+            accepted_by: existingUser.id
           }).eq('id', invitation.id);
         }
 
+        // Return success WITHOUT the magic link - user must check email
         return new Response(
           JSON.stringify({
             success: true,
             email: invitation.email,
             role: invitation.role,
-            action_link: magicLinkData.properties?.action_link,
-            message: 'User already exists. Signing you in...'
+            email_sent: true,
+            message: 'A sign-in link has been sent to your email. Please check your inbox.'
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -196,6 +198,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error:', error);
+    const corsHeaders = getCorsHeaders(req.headers.get('origin'));
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPreflightSafe } from '../_shared/cors.ts';
 
 interface IngestRequest {
   dataset_key: string;
@@ -167,10 +163,10 @@ async function* streamCsv(url: string): AsyncGenerator<{ row: CsvRow | null; lin
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCorsPreflightSafe(req);
+  if (corsResponse) return corsResponse;
 
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
   const startTime = Date.now();
   
   try {
@@ -496,6 +492,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error(`[Ingest] Fatal error: ${error}`);
+    const corsHeaders = getCorsHeaders(req.headers.get('origin'));
     return new Response(
       JSON.stringify({ error: String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

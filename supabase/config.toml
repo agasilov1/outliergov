@@ -1,21 +1,29 @@
 project_id = "tuhfkanamlxzokimvofd"
 
+# Admin functions - require JWT at gateway level
 [functions.generate-invite]
-verify_jwt = false
-
-[functions.accept-invite]
-verify_jwt = false
+verify_jwt = true
 
 [functions.list-users]
-verify_jwt = false
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.delete-user]
+verify_jwt = true
 
 [functions.seed-synthetic-data]
-verify_jwt = false
+verify_jwt = true
 
 [functions.recompute-anomalies]
-verify_jwt = false
+verify_jwt = true
 
 [functions.compute-peer-stats]
+verify_jwt = true
+
+# Public/ingestion functions - keep JWT verification disabled
+[functions.accept-invite]
 verify_jwt = false
 
 [functions.ingest-provider-metrics]
@@ -25,7 +33,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.batch-upsert-anomalies-offline]
-verify_jwt = false
-
-[functions.create-user]
 verify_jwt = false
