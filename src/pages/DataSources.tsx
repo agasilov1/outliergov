@@ -93,11 +93,11 @@ export default function DataSources() {
           </div>
 
           <div>
-            <h4 className="mb-2 font-medium">Percentile Calculation</h4>
+            <h4 className="mb-2 font-medium">Outlier Identification</h4>
             <p className="text-sm text-muted-foreground">
-              Within each peer group, we calculate the percentile rank of each provider's 
-              total allowed amount. Providers within the top 0.5% (≥99.5th percentile) for 
-              two consecutive years are included in the verified outlier registry.
+              During offline analysis, percentile ranks are computed within each peer group 
+              to identify extreme outliers. Providers within the top 0.5% (≥99.5th percentile) 
+              for two consecutive years are included in the verified outlier registry.
             </p>
           </div>
         </CardContent>
