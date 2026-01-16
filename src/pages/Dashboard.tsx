@@ -393,7 +393,9 @@ export default function Dashboard() {
           </CardTitle>
           <CardDescription>
             These providers are statistical outliers within their specialty-state peer groups. 
-            Rankings are by × above peer median (highest first). Providers without peer data appear at the bottom.
+            Rankings are by × above peer median (highest first). Peer medians are computed during offline 
+            analysis using the full peer group; the platform displays only the verified outlier subset. 
+            Providers without peer data appear at the bottom.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

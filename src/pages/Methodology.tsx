@@ -50,9 +50,9 @@ export default function Methodology() {
           <div>
             <h3 className="mb-2 font-semibold">Verification Approach</h3>
             <p className="text-muted-foreground">
-              All providers displayed have met minimum statistical validity thresholds during offline analysis 
-              prior to inclusion. This registry represents a curated set of verified extreme outliers rather 
-              than a full percentile distribution.
+              All providers displayed were identified during offline analysis that applied minimum statistical 
+              validity thresholds prior to inclusion. This registry represents a curated set of verified extreme 
+              outliers rather than a full percentile distribution.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               Rankings are by total Medicare billing volume among verified outliers, not by percentile rank.
