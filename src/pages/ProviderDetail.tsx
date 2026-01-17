@@ -331,8 +331,7 @@ export default function ProviderDetail() {
               <p className="text-sm mt-1">
                 {bestPeerRatio && flagYears[0]?.peer_group_size ? (
                   <>
-                    This provider billed <strong>{bestPeerRatio.toFixed(1)}× the peer median</strong> among{' '}
-                    {flagYears[0].peer_group_size.toLocaleString()} {provider.specialty} providers in {provider.state}.
+                    This provider's Medicare allowed amount was approximately <strong>{bestPeerRatio.toFixed(1)}× the peer median</strong> within a specialty–state comparison group of {flagYears[0].peer_group_size.toLocaleString()} providers.
                     This is statistical variance only—not evidence of wrongdoing.
                   </>
                 ) : (
@@ -414,12 +413,14 @@ export default function ProviderDetail() {
                           <div className="flex items-center justify-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-destructive" />
                             <span className="text-sm text-muted-foreground">
-                              Top {((1 - fy.percentile_rank) * 100).toFixed(1)}%
+                              Top 0.5% (Verified)
                             </span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">
-                            Top {((1 - fy.percentile_rank) * 100).toFixed(1)}%
+                            {((1 - fy.percentile_rank) * 100) < 0.1 
+                              ? 'Top <0.1%' 
+                              : `Top ${((1 - fy.percentile_rank) * 100).toFixed(1)}%`}
                           </span>
                         )}
                       </TableCell>
