@@ -397,6 +397,11 @@ export default function Dashboard() {
             analysis using the full peer group; the platform displays only the verified outlier subset. 
             Providers without peer data appear at the bottom.
           </CardDescription>
+          <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
+            <span><span className="font-medium">Data Source:</span> 2022–2023 Medicare Part B Claims</span>
+            <span className="text-muted-foreground/50">|</span>
+            <span><span className="font-medium">Last Analysis:</span> January 2025</span>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}

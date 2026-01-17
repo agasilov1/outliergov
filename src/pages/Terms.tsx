@@ -85,6 +85,31 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Permitted Use</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>Your access to the Service is granted solely for:</p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Internal screening and research purposes</li>
+            <li>Due diligence and case intake evaluation</li>
+            <li>Comparative statistical analysis</li>
+          </ul>
+          <p className="font-medium text-foreground">You may NOT:</p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Bulk export, scrape, or systematically download data from the Service</li>
+            <li>Publicly redistribute outputs in any format (reports, datasets, summaries)</li>
+            <li>Share outputs externally without preserving all applicable disclaimers</li>
+            <li>Use outputs as standalone evidence without independent verification</li>
+            <li>Present statistical comparisons as findings of wrongdoing</li>
+          </ul>
+          <p>
+            All outputs must retain the platform's disclaimers when shared internally or used in any documentation.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Restrictions on Use</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
