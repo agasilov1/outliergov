@@ -1,12 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart3, TrendingUp, Loader2 } from 'lucide-react';
+import { BarChart3, TrendingUp, Loader2, Database } from 'lucide-react';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 import { ProviderFilters } from '@/components/ProviderFilters';
 import {
@@ -40,58 +40,83 @@ interface RankedProvider {
   rank: number;
 }
 
+interface QueryParams {
+  search: string;
+  states: string[];
+  specialties: string[];
+  excludeInstitutional: boolean;
+}
+
 const ITEMS_PER_PAGE = 100;
 
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   
-  // Filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [stateFilter, setStateFilter] = useState<string[]>([]);
-  const [specialtyFilter, setSpecialtyFilter] = useState<string[]>([]);
-  const [excludeInstitutional, setExcludeInstitutional] = useState(true); // Default ON
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+  // Read filter state from URL
+  const searchQuery = searchParams.get('q') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1');
+  const stateFilter = searchParams.get('states')?.split(',').filter(Boolean) || [];
+  const specialtyFilter = searchParams.get('specs')?.split(',').filter(Boolean) || [];
+  const excludeInstitutional = searchParams.get('exInst') !== 'false'; // default true
 
   // Build query parameters for server-side filtering
-  const queryParams = useMemo(() => ({
+  const queryParams = useMemo((): QueryParams => ({
     search: searchQuery.trim(),
     states: stateFilter,
     specialties: specialtyFilter,
     excludeInstitutional
   }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
 
-  // Fetch data from outlier_registry with server-side filtering
-  const { data: registryData, isLoading: providersLoading } = useQuery({
-    queryKey: ['outlier-registry', queryParams],
+  // Shared filter builder - ensures count and data queries use identical filters
+  const applyFilters = useCallback((query: any, params: QueryParams) => {
+    // ONLY apply institutional filter when toggle is ON
+    if (params.excludeInstitutional) {
+      query = query.eq('is_institutional', false);
+    }
+    if (params.states.length > 0) {
+      query = query.in('state', params.states);
+    }
+    if (params.specialties.length > 0) {
+      query = query.in('specialty', params.specialties);
+    }
+    if (params.search) {
+      query = query.or(`provider_name.ilike.%${params.search}%,npi.ilike.%${params.search}%`);
+    }
+    return query;
+  }, []);
+
+  // Fetch filtered count (for accurate pagination)
+  const { data: filteredCount } = useQuery({
+    queryKey: ['outlier-count', queryParams],
     queryFn: async () => {
+      let query = supabase
+        .from('outlier_registry')
+        .select('*', { count: 'exact', head: true });
+      query = applyFilters(query, queryParams);
+      const { count, error } = await query;
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+
+  // Fetch data with server-side pagination
+  const { data: registryData, isLoading: providersLoading } = useQuery({
+    queryKey: ['outlier-registry', queryParams, currentPage],
+    queryFn: async () => {
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
       let query = supabase
         .from('outlier_registry')
         .select('npi, provider_name, specialty, state, years_as_outlier, max_x_vs_peer_median, max_total_allowed')
         .order('max_x_vs_peer_median', { ascending: false, nullsFirst: false })
         .order('max_total_allowed', { ascending: false, nullsFirst: false });
 
-      // Server-side institutional filter
-      if (queryParams.excludeInstitutional) {
-        query = query.eq('is_institutional', false);
-      }
-
-      // Server-side state filter
-      if (queryParams.states.length > 0) {
-        query = query.in('state', queryParams.states);
-      }
-
-      // Server-side specialty filter
-      if (queryParams.specialties.length > 0) {
-        query = query.in('specialty', queryParams.specialties);
-      }
-
-      // Server-side search filter
-      if (queryParams.search) {
-        query = query.or(`provider_name.ilike.%${queryParams.search}%,npi.ilike.%${queryParams.search}%`);
-      }
+      query = applyFilters(query, queryParams);
+      query = query.range(from, to);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -99,28 +124,40 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch totals and filter options (unfiltered for stats)
+  // Fetch totals (unfiltered, excluding institutional by default for stats)
   const { data: totalStats } = useQuery({
     queryKey: ['outlier-registry-stats'],
     queryFn: async () => {
       // Total count (excluding institutional by default for consistency)
-      const { count: totalCount } = await supabase
+      const { count: totalCount, error: totalError } = await supabase
         .from('outlier_registry')
         .select('*', { count: 'exact', head: true })
         .eq('is_institutional', false);
+      if (totalError) throw totalError;
 
       // Count with years_as_outlier >= 2 (multi-year outliers)
-      const { count: multiYearCount } = await supabase
+      const { count: multiYearCount, error: multiError } = await supabase
         .from('outlier_registry')
         .select('*', { count: 'exact', head: true })
         .eq('is_institutional', false)
         .gte('years_as_outlier', 2);
+      if (multiError) throw multiError;
 
       return {
         totalCount: totalCount || 0,
         multiYearCount: multiYearCount || 0
       };
     },
+  });
+
+  // Fetch dynamic year range
+  const { data: yearRange } = useQuery({
+    queryKey: ['year-range'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_data_year_range');
+      if (error) throw error;
+      return data?.[0] as { min_year: number; max_year: number } | undefined;
+    }
   });
 
   // Fetch distinct states and specialties for filter dropdowns
@@ -146,7 +183,10 @@ export default function Dashboard() {
     },
   });
 
-  // Transform registry data to ranked providers
+  // Calculate pagination from server-side count
+  const totalPages = Math.ceil((filteredCount || 0) / ITEMS_PER_PAGE);
+
+  // Transform registry data to ranked providers with page offset
   const rankedProviders = useMemo((): RankedProvider[] => {
     if (!registryData || registryData.length === 0) return [];
     
@@ -158,21 +198,31 @@ export default function Dashboard() {
       yearsAsOutlier: row.years_as_outlier || 0,
       maxPeerRatio: row.max_x_vs_peer_median,
       maxTotalAllowed: row.max_total_allowed || 0,
-      rank: index + 1  // Rank based on server-side ordering
+      // Rank accounts for pagination offset
+      rank: (currentPage - 1) * ITEMS_PER_PAGE + index + 1
     }));
-  }, [registryData]);
+  }, [registryData, currentPage]);
 
-  // Pagination
-  const totalPages = Math.ceil(rankedProviders.length / ITEMS_PER_PAGE);
-  const paginatedProviders = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return rankedProviders.slice(start, start + ITEMS_PER_PAGE);
-  }, [rankedProviders, currentPage]);
+  // URL update helpers
+  const updateFilters = useCallback((updates: Record<string, string | null>) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '') {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, value);
+      }
+    });
+    // Reset to page 1 on filter change (unless updating page itself)
+    if (!('page' in updates)) {
+      newParams.set('page', '1');
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
+  const setPage = useCallback((page: number) => {
+    updateFilters({ page: String(page) });
+  }, [updateFilters]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -184,7 +234,8 @@ export default function Dashboard() {
   };
 
   const handleRowClick = (npi: string, rank: number, totalCount: number) => {
-    navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}`);
+    // Preserve current query string for return navigation
+    navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}&returnTo=${encodeURIComponent(location.search)}`);
   };
 
   const getProviderDisplayName = (provider: RankedProvider) => {
@@ -195,10 +246,7 @@ export default function Dashboard() {
   };
 
   const handleClearAllFilters = () => {
-    setSearchQuery('');
-    setStateFilter([]);
-    setSpecialtyFilter([]);
-    setExcludeInstitutional(true); // Reset to default ON
+    setSearchParams(new URLSearchParams());
   };
 
   // Generate page numbers for pagination
@@ -260,7 +308,7 @@ export default function Dashboard() {
       </Card>
 
       {/* Stats overview */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Outlier Providers</CardTitle>
@@ -293,13 +341,28 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Data Period</CardTitle>
+            <CardTitle className="text-sm font-medium">Data Available</CardTitle>
+            <Database className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {yearRange ? `${yearRange.min_year}–${yearRange.max_year}` : '—'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Years in dataset
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Registry Window</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2022-2023</div>
+            <div className="text-2xl font-bold">2022–2023</div>
             <p className="text-xs text-muted-foreground">
-              Years analyzed
+              Persistence requirement
             </p>
           </CardContent>
         </Card>
@@ -319,7 +382,7 @@ export default function Dashboard() {
             Providers without peer data appear at the bottom.
           </CardDescription>
           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
-            <span><span className="font-medium">Data Source:</span> 2022–2023 Medicare Part B Claims</span>
+            <span><span className="font-medium">Data Source:</span> {yearRange ? `${yearRange.min_year}–${yearRange.max_year}` : '2022–2023'} Medicare Part B Claims</span>
             <span className="text-muted-foreground/50">|</span>
             <span><span className="font-medium">Last Analysis:</span> January 2025</span>
           </div>
@@ -331,15 +394,15 @@ export default function Dashboard() {
             specialties={filterOptions?.specialties || []}
             selectedStates={stateFilter}
             selectedSpecialties={specialtyFilter}
-            onStateChange={setStateFilter}
-            onSpecialtyChange={setSpecialtyFilter}
+            onStateChange={(states) => updateFilters({ states: states.join(',') || null })}
+            onSpecialtyChange={(specs) => updateFilters({ specs: specs.join(',') || null })}
             onClearAll={handleClearAllFilters}
             totalCount={totalStats?.totalCount || 0}
-            filteredCount={rankedProviders.length}
+            filteredCount={filteredCount || 0}
             excludeInstitutional={excludeInstitutional}
-            onExcludeInstitutionalChange={setExcludeInstitutional}
+            onExcludeInstitutionalChange={(val) => updateFilters({ exInst: val ? null : 'false' })}
             searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            onSearchChange={(q) => updateFilters({ q: q || null })}
           />
 
           {/* Table */}
@@ -347,7 +410,7 @@ export default function Dashboard() {
             <div className="flex min-h-[200px] items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : rankedProviders.length === 0 ? (
+          ) : (filteredCount || 0) === 0 ? (
             <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
               {(totalStats?.totalCount || 0) === 0 
                 ? 'No data found in outlier_registry table.'
@@ -358,7 +421,7 @@ export default function Dashboard() {
               {/* Pagination info */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, rankedProviders.length)} of {rankedProviders.length.toLocaleString()} verified outliers
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredCount || 0)} of {(filteredCount || 0).toLocaleString()} verified outliers
                 </span>
                 <span>Page {currentPage} of {totalPages}</span>
               </div>
@@ -378,12 +441,12 @@ export default function Dashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedProviders.map((provider) => {
+                    {rankedProviders.map((provider) => {
                       return (
                         <TableRow
                           key={provider.npi}
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => handleRowClick(provider.npi, provider.rank, rankedProviders.length)}
+                          onClick={() => handleRowClick(provider.npi, provider.rank, filteredCount || 0)}
                         >
                           <TableCell className="font-mono font-semibold text-muted-foreground">
                             #{provider.rank}
@@ -426,7 +489,7 @@ export default function Dashboard() {
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious 
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        onClick={() => setPage(Math.max(1, currentPage - 1))}
                         className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                       />
                     </PaginationItem>
@@ -437,7 +500,7 @@ export default function Dashboard() {
                           <PaginationEllipsis />
                         ) : (
                           <PaginationLink
-                            onClick={() => setCurrentPage(page)}
+                            onClick={() => setPage(page)}
                             isActive={currentPage === page}
                             className="cursor-pointer"
                           >
@@ -449,7 +512,7 @@ export default function Dashboard() {
                     
                     <PaginationItem>
                       <PaginationNext 
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
                         className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                       />
                     </PaginationItem>

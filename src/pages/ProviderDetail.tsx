@@ -18,6 +18,7 @@ interface ProviderYearMetric {
   provider_name: string | null;
   specialty: string | null;
   state: string | null;
+  entity_type: string | null;
   tot_allowed_cents: number | null;
   tot_benes: number | null;
   tot_srvcs: number | null;
@@ -40,6 +41,8 @@ interface FlagYear {
   peerGroupSize: number | null;
   xVsPeerMedian: number | null;
   verifiedTop05: boolean;
+  beneficiaries: number | null;
+  services: number | null;
 }
 
 export default function ProviderDetail() {
@@ -53,9 +56,10 @@ export default function ProviderDetail() {
   const [searchResults, setSearchResults] = useState<{npi: string, provider_name: string | null, specialty: string | null}[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
-  // Get rank from URL params
+  // Get rank and returnTo from URL params
   const rankFromUrl = searchParams.get('rank');
   const totalFromUrl = searchParams.get('total');
+  const returnTo = searchParams.get('returnTo');
   const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
   const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : 5885;
 
@@ -100,13 +104,22 @@ export default function ProviderDetail() {
     window.print();
   };
 
+  // Handle back navigation - preserve query string
+  const handleBack = () => {
+    if (returnTo) {
+      navigate(`/dashboard${decodeURIComponent(returnTo)}`);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   // Fetch data from provider_year_metrics
   const { data: metricsData, isLoading } = useQuery({
     queryKey: ['provider-year-metrics', npi],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('provider_year_metrics')
-        .select('npi, year, provider_name, specialty, state, tot_allowed_cents, tot_benes, tot_srvcs, allowed_per_bene_cents, peer_median_allowed_per_bene, peer_p75_allowed_per_bene, peer_p995_allowed_per_bene, peer_group_size, percentile_rank, x_vs_peer_median, verified_top_0_5')
+        .select('npi, year, provider_name, specialty, state, entity_type, tot_allowed_cents, tot_benes, tot_srvcs, allowed_per_bene_cents, peer_median_allowed_per_bene, peer_p75_allowed_per_bene, peer_p995_allowed_per_bene, peer_group_size, percentile_rank, x_vs_peer_median, verified_top_0_5')
         .eq('npi', npi)
         .order('year');
       if (error) throw error;
@@ -123,7 +136,8 @@ export default function ProviderDetail() {
       npi: first.npi,
       provider_name: first.provider_name || `Provider NPI ${first.npi}`,
       specialty: first.specialty || 'Unknown',
-      state: first.state || 'Unknown'
+      state: first.state || 'Unknown',
+      entity_type: first.entity_type
     };
   }, [metricsData]);
 
@@ -144,7 +158,9 @@ export default function ProviderDetail() {
       peerMedianPerBeneDollars: row.peer_median_allowed_per_bene,  // Already in dollars
       peerGroupSize: row.peer_group_size,
       xVsPeerMedian: row.x_vs_peer_median,
-      verifiedTop05: row.verified_top_0_5 === true
+      verifiedTop05: row.verified_top_0_5 === true,
+      beneficiaries: row.tot_benes,
+      services: row.tot_srvcs
     }));
   }, [metricsData]);
 
@@ -185,6 +201,17 @@ export default function ProviderDetail() {
     return provider.provider_name || `Provider NPI ${provider.npi}`;
   };
 
+  // Entity type badge helper
+  const getEntityTypeBadge = () => {
+    if (!provider?.entity_type) return null;
+    const isIndividual = provider.entity_type === 'I';
+    return (
+      <Badge variant="outline" className="ml-2 text-xs">
+        {isIndividual ? 'Individual' : 'Organization'}
+      </Badge>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -196,7 +223,7 @@ export default function ProviderDetail() {
   if (!provider || !metricsData || metricsData.length === 0) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
+        <Button variant="ghost" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
@@ -213,7 +240,7 @@ export default function ProviderDetail() {
     <div className="space-y-6 print-container">
       {/* Header with back button and search */}
       <div className="flex items-center justify-between gap-4 no-print">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
+        <Button variant="ghost" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
         </Button>
@@ -256,14 +283,17 @@ export default function ProviderDetail() {
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
-              <CardTitle className="text-2xl">{getProviderDisplayName()}</CardTitle>
+              <CardTitle className="text-2xl flex items-center">
+                {getProviderDisplayName()}
+                {getEntityTypeBadge()}
+              </CardTitle>
               <CardDescription className="mt-1">
                 NPI: {provider.npi} • {provider.specialty} • {provider.state}
               </CardDescription>
-              {/* Rank indicator */}
+              {/* Rank indicator - fixed wording */}
               {rank && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ranked #{rank} by Medicare billing volume among {totalProviders.toLocaleString()} verified outliers
+                  Ranked #{rank} by × above peer median among {totalProviders.toLocaleString()} verified outliers
                 </p>
               )}
             </div>
@@ -370,6 +400,8 @@ export default function ProviderDetail() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Year</TableHead>
+                  <TableHead className="text-right">Beneficiaries</TableHead>
+                  <TableHead className="text-right">Services</TableHead>
                   <TableHead className="text-right">Total Allowed</TableHead>
                   <TableHead className="text-right">Allowed per Bene</TableHead>
                   <TableHead className="text-right">Peer Median (per bene)</TableHead>
@@ -396,6 +428,18 @@ export default function ProviderDetail() {
                   return (
                     <TableRow key={fy.year}>
                       <TableCell className="font-medium">{fy.year}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {fy.beneficiaries !== null 
+                          ? fy.beneficiaries.toLocaleString()
+                          : <span className="text-muted-foreground italic">N/A</span>
+                        }
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {fy.services !== null 
+                          ? fy.services.toLocaleString()
+                          : <span className="text-muted-foreground italic">N/A</span>
+                        }
+                      </TableCell>
                       <TableCell className="text-right font-mono">
                         {formatCurrency(fy.totalAllowedDollars)}
                       </TableCell>
@@ -431,9 +475,7 @@ export default function ProviderDetail() {
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">
-                            {((1 - fy.percentile_rank) * 100) < 0.1 
-                              ? 'Top <0.1%' 
-                              : `Top ${((1 - fy.percentile_rank) * 100).toFixed(1)}%`}
+                            Top {((1 - fy.percentile_rank) * 100).toFixed(2)}% (Not verified)
                           </span>
                         )}
                       </TableCell>
