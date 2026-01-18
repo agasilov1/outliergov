@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { useEffect, useMemo, useState } from 'react';
@@ -86,8 +86,8 @@ export default function ProviderDetail() {
     }
 
     const timeout = setTimeout(async () => {
-      // Sanitize: commas break PostgREST .or() syntax (names like "Last, First")
-      const safeSearch = searchQuery.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      // Sanitize: commas and parentheses break PostgREST .or() syntax
+      const safeSearch = searchQuery.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
       const { data } = await supabase
         .from('outlier_registry')
         .select('npi, provider_name, specialty')
@@ -407,31 +407,35 @@ export default function ProviderDetail() {
                   <TableHead className="text-right">Total Allowed</TableHead>
                   <TableHead className="text-right">Allowed per Bene</TableHead>
                   <TableHead className="text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      Peer Median (per bene)
+                    <TooltipProvider>
                       <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="h-3 w-3 text-muted-foreground" />
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center justify-end gap-1 cursor-help">
+                            Peer Median (per bene)
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
                         </TooltipTrigger>
                         <TooltipContent>
                           Rounded for display; ratios use exact values
                         </TooltipContent>
                       </Tooltip>
-                    </span>
+                    </TooltipProvider>
                   </TableHead>
                   <TableHead className="text-right">vs Median</TableHead>
                   <TableHead className="text-center">
-                    <span className="flex items-center justify-center gap-1">
-                      Percentile
+                    <TooltipProvider>
                       <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="h-3 w-3 text-muted-foreground" />
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center justify-center gap-1 cursor-help">
+                            Percentile
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
                         </TooltipTrigger>
                         <TooltipContent>
                           Percentile rank within specialty-state peer group
                         </TooltipContent>
                       </Tooltip>
-                    </span>
+                    </TooltipProvider>
                   </TableHead>
                 </TableRow>
               </TableHeader>
