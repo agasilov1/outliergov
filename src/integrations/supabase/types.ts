@@ -912,6 +912,13 @@ export type Database = {
         }[]
       }
       get_active_dataset_release: { Args: never; Returns: string }
+      get_data_year_range: {
+        Args: never
+        Returns: {
+          max_year: number
+          min_year: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
