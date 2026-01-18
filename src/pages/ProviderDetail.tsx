@@ -12,32 +12,34 @@ import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download } from 'lucide-r
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { useEffect, useMemo, useState } from 'react';
 
-interface AnomalyOffline {
-  id: string;
+interface ProviderYearMetric {
   npi: string;
+  year: number;
   provider_name: string | null;
   specialty: string | null;
   state: string | null;
-  year: number;
-  percentile_rank: number | null;
-  total_allowed_amount: number | null;
-  beneficiary_count: number | null;
-  service_count: number | null;
-  // Peer comparison fields
-  peer_median_allowed: number | null;
-  peer_p75_allowed: number | null;
+  tot_allowed_cents: number | null;
+  tot_benes: number | null;
+  tot_srvcs: number | null;
+  allowed_per_bene_cents: number | null;
+  peer_median_allowed_per_bene: number | null;
+  peer_p75_allowed_per_bene: number | null;
+  peer_p995_allowed_per_bene: number | null;
   peer_group_size: number | null;
-  allowed_vs_peer_median: number | null;
-  allowed_vs_peer_median_log: number | null;
+  percentile_rank: number | null;
+  x_vs_peer_median: number | null;
+  verified_top_0_5: boolean | null;
 }
 
 interface FlagYear {
   year: number;
   percentile_rank: number;
-  value: number;
-  peer_median_allowed: number | null;
-  peer_group_size: number | null;
-  allowed_vs_peer_median: number | null;
+  totalAllowedDollars: number;
+  allowedPerBeneDollars: number | null;
+  peerMedianPerBeneDollars: number | null;
+  peerGroupSize: number | null;
+  xVsPeerMedian: number | null;
+  verifiedTop05: boolean;
 }
 
 export default function ProviderDetail() {
@@ -71,7 +73,7 @@ export default function ProviderDetail() {
     }
   }, [npi, user]);
 
-  // Debounced search effect
+  // Debounced search effect - now queries outlier_registry
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
@@ -81,14 +83,12 @@ export default function ProviderDetail() {
 
     const timeout = setTimeout(async () => {
       const { data } = await supabase
-        .from('anomalies_offline')
+        .from('outlier_registry')
         .select('npi, provider_name, specialty')
         .or(`provider_name.ilike.%${searchQuery}%,npi.ilike.%${searchQuery}%`)
         .limit(20);
 
-      // Dedupe by NPI
-      const unique = [...new Map(data?.map(d => [d.npi, d]) || []).values()];
-      setSearchResults(unique);
+      setSearchResults(data || []);
       setShowSearchResults(true);
     }, 300);
 
@@ -100,62 +100,69 @@ export default function ProviderDetail() {
     window.print();
   };
 
-  // Fetch anomaly data from anomalies_offline
-  const { data: anomalyData, isLoading } = useQuery({
-    queryKey: ['anomaly-offline', npi],
+  // Fetch data from provider_year_metrics
+  const { data: metricsData, isLoading } = useQuery({
+    queryKey: ['provider-year-metrics', npi],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('anomalies_offline')
-        .select('*')
+        .from('provider_year_metrics')
+        .select('npi, year, provider_name, specialty, state, tot_allowed_cents, tot_benes, tot_srvcs, allowed_per_bene_cents, peer_median_allowed_per_bene, peer_p75_allowed_per_bene, peer_p995_allowed_per_bene, peer_group_size, percentile_rank, x_vs_peer_median, verified_top_0_5')
         .eq('npi', npi)
         .order('year');
       if (error) throw error;
-      return data as AnomalyOffline[];
+      return data as ProviderYearMetric[];
     },
     enabled: !!npi
   });
 
-  // Derive provider info from anomaly data
+  // Derive provider info from metrics data
   const provider = useMemo(() => {
-    if (!anomalyData || anomalyData.length === 0) return null;
-    const first = anomalyData[0];
+    if (!metricsData || metricsData.length === 0) return null;
+    const first = metricsData[0];
     return {
       npi: first.npi,
       provider_name: first.provider_name || `Provider NPI ${first.npi}`,
       specialty: first.specialty || 'Unknown',
       state: first.state || 'Unknown'
     };
-  }, [anomalyData]);
+  }, [metricsData]);
 
-  // Transform anomaly data to flag years format with peer comparison
-  const flagYears = useMemo(() => {
-    if (!anomalyData) return [];
-    return anomalyData.map(row => ({
+  // Helper: Convert cents to dollars
+  const centsToDoallars = (cents: number | null): number | null => {
+    if (cents === null) return null;
+    return cents / 100;
+  };
+
+  // Transform metrics data to flag years format with per-bene data
+  const flagYears = useMemo((): FlagYear[] => {
+    if (!metricsData) return [];
+    return metricsData.map(row => ({
       year: row.year,
       percentile_rank: Number(row.percentile_rank) || 0,
-      value: Number(row.total_allowed_amount) || 0,
-      peer_median_allowed: row.peer_median_allowed ? Number(row.peer_median_allowed) : null,
-      peer_group_size: row.peer_group_size ? Number(row.peer_group_size) : null,
-      allowed_vs_peer_median: row.allowed_vs_peer_median ? Number(row.allowed_vs_peer_median) : null
+      totalAllowedDollars: centsToDoallars(row.tot_allowed_cents) || 0,
+      allowedPerBeneDollars: centsToDoallars(row.allowed_per_bene_cents),
+      peerMedianPerBeneDollars: row.peer_median_allowed_per_bene,  // Already in dollars
+      peerGroupSize: row.peer_group_size,
+      xVsPeerMedian: row.x_vs_peer_median,
+      verifiedTop05: row.verified_top_0_5 === true
     }));
-  }, [anomalyData]);
+  }, [metricsData]);
 
-  const yearsVerified = flagYears.filter(y => y.percentile_rank >= 0.995).length;
+  const yearsVerified = flagYears.filter(y => y.verifiedTop05).length;
 
   // Helper: Get best available peer ratio across all years
   const bestPeerRatio = useMemo(() => {
-    const withRatio = flagYears.filter(y => y.allowed_vs_peer_median !== null);
+    const withRatio = flagYears.filter(y => y.xVsPeerMedian !== null);
     if (withRatio.length === 0) return null;
-    // Return highest ratio for headline
-    return Math.max(...withRatio.map(y => y.allowed_vs_peer_median!));
+    return Math.max(...withRatio.map(y => y.xVsPeerMedian!));
   }, [flagYears]);
 
   // Helper: Check if peer data is available for a given row
   const getPeerDataStatus = (row: FlagYear) => {
-    if (row.peer_group_size !== null && row.peer_group_size < 5) {
+    if (row.peerGroupSize !== null && row.peerGroupSize < 5) {
       return { available: false, reason: 'Peer group too small (< 5 providers)' };
     }
-    if (row.peer_median_allowed === null) {
+    if (row.peerMedianPerBeneDollars === null) {
       return { available: false, reason: 'Peer data not available' };
     }
     return { available: true, reason: null };
@@ -186,7 +193,7 @@ export default function ProviderDetail() {
     );
   }
 
-  if (!provider || !anomalyData || anomalyData.length === 0) {
+  if (!provider || !metricsData || metricsData.length === 0) {
     return (
       <div className="space-y-6">
         <Button variant="ghost" onClick={() => navigate(-1)}>
@@ -291,10 +298,10 @@ export default function ProviderDetail() {
               </div>
               <div>
                 <span className="text-muted-foreground">Peer Group Size: </span>
-                {flagYears[0]?.peer_group_size !== null ? (
+                {flagYears[0]?.peerGroupSize !== null ? (
                   <span className="font-semibold">
-                    {flagYears[0].peer_group_size?.toLocaleString()} providers
-                    {flagYears[0].peer_group_size !== null && flagYears[0].peer_group_size < 5 && (
+                    {flagYears[0].peerGroupSize?.toLocaleString()} providers
+                    {flagYears[0].peerGroupSize !== null && flagYears[0].peerGroupSize < 5 && (
                       <span className="text-xs text-amber-600 ml-2">(too small for ratio)</span>
                     )}
                   </span>
@@ -307,7 +314,7 @@ export default function ProviderDetail() {
               <div>
                 <span className="text-muted-foreground">Max Allowed Amount: </span>
                 <span className="font-semibold">
-                  {formatCurrency(Math.max(...flagYears.map(y => y.value)))}
+                  {formatCurrency(Math.max(...flagYears.map(y => y.totalAllowedDollars)))}
                 </span>
               </div>
               <div>
@@ -329,9 +336,9 @@ export default function ProviderDetail() {
                 Verified Statistical Outlier — {provider.specialty}, {provider.state}
               </h3>
               <p className="text-sm mt-1">
-                {bestPeerRatio && flagYears[0]?.peer_group_size ? (
+                {bestPeerRatio && flagYears[0]?.peerGroupSize ? (
                   <>
-                    This provider's Medicare allowed amount was approximately <strong>{bestPeerRatio.toFixed(1)}× the peer median</strong> within a specialty–state comparison group of {flagYears[0].peer_group_size.toLocaleString()} providers.
+                    This provider's Medicare allowed amount per beneficiary was approximately <strong>{bestPeerRatio.toFixed(1)}× the peer median</strong> within a specialty–state comparison group of {flagYears[0].peerGroupSize.toLocaleString()} providers.
                     This is statistical variance only—not evidence of wrongdoing.
                   </>
                 ) : (
@@ -355,7 +362,7 @@ export default function ProviderDetail() {
               Per-Year Statistical Breakdown
             </CardTitle>
             <CardDescription>
-              Peer comparison and verification status for each analysis year
+              Per-beneficiary comparison and verification status for each analysis year
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -364,7 +371,8 @@ export default function ProviderDetail() {
                 <TableRow>
                   <TableHead>Year</TableHead>
                   <TableHead className="text-right">Total Allowed</TableHead>
-                  <TableHead className="text-right">Peer Median</TableHead>
+                  <TableHead className="text-right">Allowed per Bene</TableHead>
+                  <TableHead className="text-right">Peer Median (per bene)</TableHead>
                   <TableHead className="text-right">vs Median</TableHead>
                   <TableHead className="text-center">
                     <span className="flex items-center justify-center gap-1">
@@ -383,33 +391,38 @@ export default function ProviderDetail() {
               </TableHeader>
               <TableBody>
                 {flagYears.map(fy => {
-                  const isVerified = fy.percentile_rank >= 0.995;
                   const peerStatus = getPeerDataStatus(fy);
                   
                   return (
                     <TableRow key={fy.year}>
                       <TableCell className="font-medium">{fy.year}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatCurrency(fy.value)}
+                        {formatCurrency(fy.totalAllowedDollars)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {fy.allowedPerBeneDollars !== null 
+                          ? formatCurrency(fy.allowedPerBeneDollars)
+                          : <span className="text-muted-foreground italic">N/A</span>
+                        }
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {peerStatus.available ? (
-                          <span className="font-mono">{formatCurrency(fy.peer_median_allowed!)}</span>
+                          <span className="font-mono">{formatCurrency(fy.peerMedianPerBeneDollars!)}</span>
                         ) : (
                           <span className="text-xs italic">{peerStatus.reason}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {peerStatus.available ? (
+                        {peerStatus.available && fy.xVsPeerMedian !== null ? (
                           <Badge variant="outline" className="font-mono">
-                            {fy.allowed_vs_peer_median!.toFixed(1)}×
+                            {fy.xVsPeerMedian.toFixed(1)}×
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">{peerStatus.reason}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {isVerified ? (
+                        {fy.verifiedTop05 ? (
                           <div className="flex items-center justify-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-destructive" />
                             <span className="text-sm text-muted-foreground">

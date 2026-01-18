@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,56 +19,28 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 
-interface AnomalyOffline {
-  id: string;
+interface OutlierRegistry {
   npi: string;
   provider_name: string | null;
   specialty: string | null;
   state: string | null;
-  year: number;
-  percentile_rank: number | null;
-  total_allowed_amount: number | null;
-  beneficiary_count: number | null;
-  service_count: number | null;
-  peer_median_allowed: number | null;
-  peer_group_size: number | null;
-  allowed_vs_peer_median: number | null;
+  years_as_outlier: number | null;
+  max_x_vs_peer_median: number | null;
+  max_total_allowed: number | null;
 }
 
-interface YearData {
-  year: number;
-  percentile_rank: number;
-  total_allowed_amount: number;
-  allowed_vs_peer_median: number | null;
-  peer_group_size: number | null;
-}
-
-interface AggregatedProvider {
+interface RankedProvider {
   npi: string;
   provider_name: string;
   specialty: string;
   state: string;
-  years: YearData[];
-  maxAllowedAmount: number;
+  yearsAsOutlier: number;
   maxPeerRatio: number | null;
-  yearsVerified: number;
+  maxTotalAllowed: number;
   rank: number;
 }
 
 const ITEMS_PER_PAGE = 100;
-
-// Institutional specialties to exclude by default
-const INSTITUTIONAL_SPECIALTIES = [
-  'pharmacy',
-  'centralized flu',
-  'portable x-ray supplier',
-  'clinical laboratory',
-  'idtf',
-  'ambulance service',
-  'ambulatory surgical',
-  'all other suppliers',
-  'unknown supplier/provider specialty'
-];
 
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
@@ -83,175 +55,124 @@ export default function Dashboard() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch ALL data from anomalies_offline using pagination to bypass server limits
-  const fetchAllAnomalies = async (): Promise<AnomalyOffline[]> => {
-    const PAGE_SIZE = 1000;
-    let allData: AnomalyOffline[] = [];
-    let from = 0;
-    let hasMore = true;
+  // Build query parameters for server-side filtering
+  const queryParams = useMemo(() => ({
+    search: searchQuery.trim(),
+    states: stateFilter,
+    specialties: specialtyFilter,
+    excludeInstitutional
+  }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
 
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('anomalies_offline')
-        .select('*')
-        .range(from, from + PAGE_SIZE - 1);
+  // Fetch data from outlier_registry with server-side filtering
+  const { data: registryData, isLoading: providersLoading } = useQuery({
+    queryKey: ['outlier-registry', queryParams],
+    queryFn: async () => {
+      let query = supabase
+        .from('outlier_registry')
+        .select('npi, provider_name, specialty, state, years_as_outlier, max_x_vs_peer_median, max_total_allowed')
+        .order('max_x_vs_peer_median', { ascending: false, nullsFirst: false })
+        .order('max_total_allowed', { ascending: false, nullsFirst: false });
 
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        allData = [...allData, ...data];
-        from += PAGE_SIZE;
-        hasMore = data.length === PAGE_SIZE;
-      } else {
-        hasMore = false;
+      // Server-side institutional filter
+      if (queryParams.excludeInstitutional) {
+        query = query.eq('is_institutional', false);
       }
-    }
 
-    return allData;
-  };
+      // Server-side state filter
+      if (queryParams.states.length > 0) {
+        query = query.in('state', queryParams.states);
+      }
 
-  const { data: anomaliesOffline, isLoading: providersLoading } = useQuery({
-    queryKey: ['anomalies-offline-all'],
-    queryFn: fetchAllAnomalies,
+      // Server-side specialty filter
+      if (queryParams.specialties.length > 0) {
+        query = query.in('specialty', queryParams.specialties);
+      }
+
+      // Server-side search filter
+      if (queryParams.search) {
+        query = query.or(`provider_name.ilike.%${queryParams.search}%,npi.ilike.%${queryParams.search}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as OutlierRegistry[];
+    },
   });
 
-  // Aggregate providers from anomalies_offline
-  const rankedProviders = useMemo(() => {
-    if (!anomaliesOffline || anomaliesOffline.length === 0) return [];
-    
-    // Group by NPI
-    const grouped = anomaliesOffline.reduce((acc, row) => {
-      if (!acc[row.npi]) {
-        acc[row.npi] = {
-          npi: row.npi,
-          provider_name: row.provider_name || `Provider NPI ${row.npi}`,
-          specialty: row.specialty || 'Unknown',
-          state: row.state || 'Unknown',
-          years: [] as YearData[]
-        };
-      }
-      acc[row.npi].years.push({
-        year: row.year,
-        percentile_rank: Number(row.percentile_rank) || 0,
-        total_allowed_amount: Number(row.total_allowed_amount) || 0,
-        allowed_vs_peer_median: row.allowed_vs_peer_median,
-        peer_group_size: row.peer_group_size
-      });
-      return acc;
-    }, {} as Record<string, { npi: string; provider_name: string; specialty: string; state: string; years: YearData[] }>);
-    
-    // Convert to array and calculate metrics
-    const providers: AggregatedProvider[] = Object.values(grouped).map((p) => {
-      const maxAllowedAmount = p.years.length > 0 
-        ? Math.max(...p.years.map(y => y.total_allowed_amount)) 
-        : 0;
-      
-      // Calculate max peer ratio (× above median)
-      const peerRatios = p.years
-        .filter(y => y.allowed_vs_peer_median !== null)
-        .map(y => y.allowed_vs_peer_median!);
-      const maxPeerRatio = peerRatios.length > 0 
-        ? Math.max(...peerRatios) 
-        : null;
-      
-      // Count years where percentile >= 0.995 (99.5th) - all are verified
-      const yearsVerified = p.years.filter(y => y.percentile_rank >= 0.995).length;
-      
+  // Fetch totals and filter options (unfiltered for stats)
+  const { data: totalStats } = useQuery({
+    queryKey: ['outlier-registry-stats'],
+    queryFn: async () => {
+      // Total count (excluding institutional by default for consistency)
+      const { count: totalCount } = await supabase
+        .from('outlier_registry')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_institutional', false);
+
+      // Count with years_as_outlier >= 2 (multi-year outliers)
+      const { count: multiYearCount } = await supabase
+        .from('outlier_registry')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_institutional', false)
+        .gte('years_as_outlier', 2);
+
       return {
-        ...p,
-        maxAllowedAmount,
-        maxPeerRatio,
-        yearsVerified,
-        rank: 0
+        totalCount: totalCount || 0,
+        multiYearCount: multiYearCount || 0
       };
-    });
-    
-    // Sort by max peer ratio DESC (× above median), fallback to allowed amount
-    providers.sort((a, b) => {
-      // Providers with peer ratios rank higher than those without
-      if (a.maxPeerRatio !== null && b.maxPeerRatio === null) return -1;
-      if (a.maxPeerRatio === null && b.maxPeerRatio !== null) return 1;
-      
-      // Both have ratios - sort by ratio DESC
-      if (a.maxPeerRatio !== null && b.maxPeerRatio !== null) {
-        if (b.maxPeerRatio !== a.maxPeerRatio) return b.maxPeerRatio - a.maxPeerRatio;
-      }
-      
-      // Fallback to allowed amount
-      return b.maxAllowedAmount - a.maxAllowedAmount;
-    });
-    
-    // Assign ranks
-    providers.forEach((p, index) => {
-      p.rank = index + 1;
-    });
-    
-    return providers;
-  }, [anomaliesOffline]);
+    },
+  });
 
-  // Get unique filter options
-  const filterOptions = useMemo(() => {
-    if (!rankedProviders) return { states: [], specialties: [] };
-    
-    const states = [...new Set(rankedProviders.map(p => p.state))].sort();
-    const specialties = [...new Set(rankedProviders.map(p => p.specialty))].sort();
-    
-    return { states, specialties };
-  }, [rankedProviders]);
-
-  // Apply filters
-  const filteredProviders = useMemo(() => {
-    return rankedProviders.filter(p => {
-      // Search filter - check name or NPI
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesName = p.provider_name.toLowerCase().includes(query);
-        const matchesNpi = p.npi.includes(query);
-        if (!matchesName && !matchesNpi) return false;
-      }
+  // Fetch distinct states and specialties for filter dropdowns
+  const { data: filterOptions } = useQuery({
+    queryKey: ['outlier-registry-filter-options'],
+    queryFn: async () => {
+      // Get distinct states
+      const { data: statesData } = await supabase
+        .from('outlier_registry')
+        .select('state')
+        .not('state', 'is', null);
       
-      // Institutional filter (default ON - excludes institutional entities)
-      if (excludeInstitutional) {
-        const specialtyLower = p.specialty.toLowerCase();
-        if (INSTITUTIONAL_SPECIALTIES.some(inst => specialtyLower.includes(inst))) {
-          return false;
-        }
-      }
-      if (stateFilter.length > 0 && !stateFilter.includes(p.state)) return false;
-      if (specialtyFilter.length > 0 && !specialtyFilter.includes(p.specialty)) return false;
-      return true;
-    });
-  }, [rankedProviders, searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
+      // Get distinct specialties
+      const { data: specialtiesData } = await supabase
+        .from('outlier_registry')
+        .select('specialty')
+        .not('specialty', 'is', null);
+
+      const states = [...new Set(statesData?.map(s => s.state).filter(Boolean) as string[])].sort();
+      const specialties = [...new Set(specialtiesData?.map(s => s.specialty).filter(Boolean) as string[])].sort();
+
+      return { states, specialties };
+    },
+  });
+
+  // Transform registry data to ranked providers
+  const rankedProviders = useMemo((): RankedProvider[] => {
+    if (!registryData || registryData.length === 0) return [];
+    
+    return registryData.map((row, index) => ({
+      npi: row.npi,
+      provider_name: row.provider_name || `Provider NPI ${row.npi}`,
+      specialty: row.specialty || 'Unknown',
+      state: row.state || 'Unknown',
+      yearsAsOutlier: row.years_as_outlier || 0,
+      maxPeerRatio: row.max_x_vs_peer_median,
+      maxTotalAllowed: row.max_total_allowed || 0,
+      rank: index + 1  // Rank based on server-side ordering
+    }));
+  }, [registryData]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredProviders.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(rankedProviders.length / ITEMS_PER_PAGE);
   const paginatedProviders = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProviders.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredProviders, currentPage]);
+    return rankedProviders.slice(start, start + ITEMS_PER_PAGE);
+  }, [rankedProviders, currentPage]);
 
   // Reset to page 1 when filters change
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
-
-  // Derive unique years from anomalies_offline
-  const uniqueYears = useMemo(() => {
-    if (!anomaliesOffline || anomaliesOffline.length === 0) return [];
-    return [...new Set(anomaliesOffline.map(a => a.year))].sort((a, b) => a - b);
-  }, [anomaliesOffline]);
-
-  // Format year range for display
-  const yearRangeDisplay = useMemo(() => {
-    if (uniqueYears.length === 0) return '--';
-    if (uniqueYears.length === 1) return uniqueYears[0].toString();
-    return `${uniqueYears[0]}-${uniqueYears[uniqueYears.length - 1]}`;
-  }, [uniqueYears]);
-
-  // Count providers verified in ALL years
-  const allYearsVerifiedCount = rankedProviders.filter(p => 
-    p.yearsVerified === uniqueYears.length && uniqueYears.length > 0
-  ).length;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -266,7 +187,7 @@ export default function Dashboard() {
     navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}`);
   };
 
-  const getProviderDisplayName = (provider: AggregatedProvider) => {
+  const getProviderDisplayName = (provider: RankedProvider) => {
     if (provider.provider_name === provider.npi) {
       return `Provider NPI ${provider.npi}`;
     }
@@ -347,7 +268,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : rankedProviders.length.toLocaleString()}
+              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (totalStats?.totalCount || 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
               Statistical outliers vs peer median
@@ -357,15 +278,15 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outliers Both Years</CardTitle>
+            <CardTitle className="text-sm font-medium">Multi-Year Outliers</CardTitle>
             <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">
-              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : allYearsVerifiedCount.toLocaleString()}
+              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (totalStats?.multiYearCount || 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Above peer threshold in all years
+              Outliers in 2+ years
             </p>
           </CardContent>
         </Card>
@@ -376,7 +297,7 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{yearRangeDisplay}</div>
+            <div className="text-2xl font-bold">2022-2023</div>
             <p className="text-xs text-muted-foreground">
               Years analyzed
             </p>
@@ -406,15 +327,15 @@ export default function Dashboard() {
         <CardContent className="space-y-4">
           {/* Filters */}
           <ProviderFilters
-            states={filterOptions.states}
-            specialties={filterOptions.specialties}
+            states={filterOptions?.states || []}
+            specialties={filterOptions?.specialties || []}
             selectedStates={stateFilter}
             selectedSpecialties={specialtyFilter}
             onStateChange={setStateFilter}
             onSpecialtyChange={setSpecialtyFilter}
             onClearAll={handleClearAllFilters}
-            totalCount={rankedProviders.length}
-            filteredCount={filteredProviders.length}
+            totalCount={totalStats?.totalCount || 0}
+            filteredCount={rankedProviders.length}
             excludeInstitutional={excludeInstitutional}
             onExcludeInstitutionalChange={setExcludeInstitutional}
             searchQuery={searchQuery}
@@ -426,10 +347,10 @@ export default function Dashboard() {
             <div className="flex min-h-[200px] items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredProviders.length === 0 ? (
+          ) : rankedProviders.length === 0 ? (
             <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
-              {rankedProviders.length === 0 
-                ? 'No data found in anomalies_offline table.'
+              {(totalStats?.totalCount || 0) === 0 
+                ? 'No data found in outlier_registry table.'
                 : 'No providers match the current filters.'}
             </div>
           ) : (
@@ -437,7 +358,7 @@ export default function Dashboard() {
               {/* Pagination info */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredProviders.length)} of {filteredProviders.length.toLocaleString()} verified outliers
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, rankedProviders.length)} of {rankedProviders.length.toLocaleString()} verified outliers
                 </span>
                 <span>Page {currentPage} of {totalPages}</span>
               </div>
@@ -453,9 +374,7 @@ export default function Dashboard() {
                       <TableHead>State</TableHead>
                       <TableHead className="text-right">× Above Median</TableHead>
                       <TableHead className="text-right">Max Allowed</TableHead>
-                      {uniqueYears.map(year => (
-                        <TableHead key={year} className="text-center">{year}</TableHead>
-                      ))}
+                      <TableHead className="text-center">Years Outlier</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -487,21 +406,13 @@ export default function Dashboard() {
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            {formatCurrency(provider.maxAllowedAmount)}
+                            {formatCurrency(provider.maxTotalAllowed)}
                           </TableCell>
-                          {uniqueYears.map(year => {
-                            const yearData = provider.years.find(y => y.year === year);
-                            return (
-                              <TableCell key={year} className="text-center font-mono text-sm">
-                                {yearData?.allowed_vs_peer_median !== null && yearData?.allowed_vs_peer_median !== undefined
-                                  ? `${yearData.allowed_vs_peer_median.toFixed(1)}×`
-                                  : yearData 
-                                    ? <span className="text-muted-foreground">-</span>
-                                    : <span className="text-muted-foreground">-</span>
-                                }
-                              </TableCell>
-                            );
-                          })}
+                          <TableCell className="text-center">
+                            <Badge variant={provider.yearsAsOutlier >= 2 ? "destructive" : "secondary"}>
+                              {provider.yearsAsOutlier}
+                            </Badge>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
