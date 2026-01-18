@@ -80,7 +80,8 @@ export default function DataSources() {
             <h4 className="mb-2 font-medium">Aggregation</h4>
             <p className="text-sm text-muted-foreground">
               Provider-level data is aggregated by NPI, summing total allowed amounts 
-              across all procedures for each calendar year.
+              across all procedures for each calendar year. We compute allowed per beneficiary 
+              using provider totals (Tot_Mdcr_Alowd_Amt / Tot_Benes).
             </p>
           </div>
 
@@ -95,8 +96,9 @@ export default function DataSources() {
           <div>
             <h4 className="mb-2 font-medium">Outlier Identification</h4>
             <p className="text-sm text-muted-foreground">
-              During offline analysis, percentile ranks are computed within each peer group 
-              to identify extreme outliers. Providers within the top 0.5% (≥99.5th percentile) 
+              During offline analysis, percentile ranks for allowed amount per beneficiary are 
+              computed within each peer group to identify extreme outliers. Providers whose 
+              per-beneficiary allowed amount falls within the top 0.5% (≥99.5th percentile) 
               for two consecutive years are included in the verified outlier registry.
             </p>
           </div>

@@ -30,15 +30,17 @@ export default function Methodology() {
           <div>
             <h3 className="mb-2 font-semibold">Metric</h3>
             <p className="text-muted-foreground">
-              We analyze <strong>total allowed amount per year</strong> — the sum of what Medicare approved for payment 
-              to each provider. This metric captures both the volume and intensity of services billed.
+              We analyze <strong>Medicare allowed amount per beneficiary per year</strong> (total allowed divided by 
+              total beneficiaries). This per-capita metric normalizes for patient volume. Peer median is the median 
+              allowed-per-beneficiary within the specialty-state peer group for that year. Total allowed amount is 
+              also displayed for volume context.
             </p>
           </div>
 
           <div>
             <h3 className="mb-2 font-semibold">Inclusion Threshold</h3>
             <p className="text-muted-foreground">
-              A provider is included in this registry if their total allowed amount ranked within the <Badge className="bg-destructive text-destructive-foreground">Top 0.5% (≥99.5th percentile)</Badge> of 
+              A provider is included in this registry if their allowed amount per beneficiary ranked within the <Badge className="bg-destructive text-destructive-foreground">Top 0.5% (≥99.5th percentile)</Badge> of 
               their specialty-state peer group for <strong>2 consecutive years</strong> within the analysis window.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -55,7 +57,7 @@ export default function Methodology() {
               outliers rather than a full percentile distribution.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Rankings are by total Medicare billing volume among verified outliers, not by percentile rank.
+              Rankings are by multiples above the peer median (per-beneficiary allowed amount), not by percentile rank.
             </p>
           </div>
 

@@ -86,10 +86,12 @@ export default function ProviderDetail() {
     }
 
     const timeout = setTimeout(async () => {
+      // Sanitize: commas break PostgREST .or() syntax (names like "Last, First")
+      const safeSearch = searchQuery.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
       const { data } = await supabase
         .from('outlier_registry')
         .select('npi, provider_name, specialty')
-        .or(`provider_name.ilike.%${searchQuery}%,npi.ilike.%${searchQuery}%`)
+        .or(`provider_name.ilike.%${safeSearch}%,npi.ilike.%${safeSearch}%`)
         .limit(20);
 
       setSearchResults(data || []);
@@ -404,7 +406,19 @@ export default function ProviderDetail() {
                   <TableHead className="text-right">Services</TableHead>
                   <TableHead className="text-right">Total Allowed</TableHead>
                   <TableHead className="text-right">Allowed per Bene</TableHead>
-                  <TableHead className="text-right">Peer Median (per bene)</TableHead>
+                  <TableHead className="text-right">
+                    <span className="flex items-center justify-end gap-1">
+                      Peer Median (per bene)
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Rounded for display; ratios use exact values
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  </TableHead>
                   <TableHead className="text-right">vs Median</TableHead>
                   <TableHead className="text-center">
                     <span className="flex items-center justify-center gap-1">
