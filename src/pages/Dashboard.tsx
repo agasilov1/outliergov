@@ -47,7 +47,7 @@ interface QueryParams {
   excludeInstitutional: boolean;
 }
 
-const ITEMS_PER_PAGE = 100;
+const ITEMS_PER_PAGE = 50;
 
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
