@@ -437,6 +437,39 @@ export type Database = {
           },
         ]
       }
+      outlier_registry: {
+        Row: {
+          created_at: string | null
+          max_total_allowed: number | null
+          max_x_vs_peer_median: number | null
+          npi: string
+          provider_name: string | null
+          specialty: string | null
+          state: string | null
+          years_as_outlier: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          max_total_allowed?: number | null
+          max_x_vs_peer_median?: number | null
+          npi: string
+          provider_name?: string | null
+          specialty?: string | null
+          state?: string | null
+          years_as_outlier?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          max_total_allowed?: number | null
+          max_x_vs_peer_median?: number | null
+          npi?: string
+          provider_name?: string | null
+          specialty?: string | null
+          state?: string | null
+          years_as_outlier?: number | null
+        }
+        Relationships: []
+      }
       peer_group_definitions: {
         Row: {
           created_at: string | null
@@ -629,6 +662,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      provider_year_metrics: {
+        Row: {
+          allowed_per_bene_cents: number | null
+          created_at: string | null
+          entity_type: string | null
+          npi: string
+          peer_group_size: number | null
+          peer_median_allowed_per_bene: number | null
+          peer_p75_allowed_per_bene: number | null
+          peer_p995_allowed_per_bene: number | null
+          percentile_rank: number | null
+          provider_name: string | null
+          specialty: string | null
+          state: string | null
+          tot_allowed_cents: number | null
+          tot_benes: number | null
+          tot_srvcs: number | null
+          tot_stdzd_cents: number | null
+          verified_top_0_5: boolean | null
+          x_vs_peer_median: number | null
+          year: number
+          zip5: string | null
+        }
+        Insert: {
+          allowed_per_bene_cents?: number | null
+          created_at?: string | null
+          entity_type?: string | null
+          npi: string
+          peer_group_size?: number | null
+          peer_median_allowed_per_bene?: number | null
+          peer_p75_allowed_per_bene?: number | null
+          peer_p995_allowed_per_bene?: number | null
+          percentile_rank?: number | null
+          provider_name?: string | null
+          specialty?: string | null
+          state?: string | null
+          tot_allowed_cents?: number | null
+          tot_benes?: number | null
+          tot_srvcs?: number | null
+          tot_stdzd_cents?: number | null
+          verified_top_0_5?: boolean | null
+          x_vs_peer_median?: number | null
+          year: number
+          zip5?: string | null
+        }
+        Update: {
+          allowed_per_bene_cents?: number | null
+          created_at?: string | null
+          entity_type?: string | null
+          npi?: string
+          peer_group_size?: number | null
+          peer_median_allowed_per_bene?: number | null
+          peer_p75_allowed_per_bene?: number | null
+          peer_p995_allowed_per_bene?: number | null
+          percentile_rank?: number | null
+          provider_name?: string | null
+          specialty?: string | null
+          state?: string | null
+          tot_allowed_cents?: number | null
+          tot_benes?: number | null
+          tot_srvcs?: number | null
+          tot_stdzd_cents?: number | null
+          verified_top_0_5?: boolean | null
+          x_vs_peer_median?: number | null
+          year?: number
+          zip5?: string | null
+        }
+        Relationships: []
       }
       provider_yearly_metrics: {
         Row: {
