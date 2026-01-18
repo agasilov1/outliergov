@@ -249,20 +249,36 @@ export default function Dashboard() {
     setSearchParams(new URLSearchParams());
   };
 
-  // Generate page numbers for pagination
+  // Generate page numbers for pagination - show up to 5 pages around current
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
+    
     if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
+      // Always show first page
       pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      
+      // Calculate window of 5 pages around current
+      const windowStart = Math.max(2, currentPage - 2);
+      const windowEnd = Math.min(totalPages - 1, currentPage + 2);
+      
+      // Add left ellipsis if needed
+      if (windowStart > 2) pages.push('ellipsis');
+      
+      // Add pages in window (up to 5 pages)
+      for (let i = windowStart; i <= windowEnd; i++) {
         pages.push(i);
       }
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
+      
+      // Add right ellipsis if needed
+      if (windowEnd < totalPages - 1) pages.push('ellipsis');
+      
+      // Always show last page
       pages.push(totalPages);
     }
+    
     return pages;
   };
 
