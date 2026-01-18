@@ -83,7 +83,11 @@ export default function Dashboard() {
       query = query.in('specialty', params.specialties);
     }
     if (params.search) {
-      query = query.or(`provider_name.ilike.%${params.search}%,npi.ilike.%${params.search}%`);
+      // Sanitize: commas break PostgREST .or() syntax (names like "Last, First")
+      const safeSearch = params.search.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      if (safeSearch) {
+        query = query.or(`provider_name.ilike.%${safeSearch}%,npi.ilike.%${safeSearch}%`);
+      }
     }
     return query;
   }, []);
@@ -124,33 +128,7 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch totals (unfiltered, excluding institutional by default for stats)
-  const { data: totalStats } = useQuery({
-    queryKey: ['outlier-registry-stats'],
-    queryFn: async () => {
-      // Total count (excluding institutional by default for consistency)
-      const { count: totalCount, error: totalError } = await supabase
-        .from('outlier_registry')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_institutional', false);
-      if (totalError) throw totalError;
-
-      // Count with years_as_outlier >= 2 (multi-year outliers)
-      const { count: multiYearCount, error: multiError } = await supabase
-        .from('outlier_registry')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_institutional', false)
-        .gte('years_as_outlier', 2);
-      if (multiError) throw multiError;
-
-      return {
-        totalCount: totalCount || 0,
-        multiYearCount: multiYearCount || 0
-      };
-    },
-  });
-
-  // Fetch dynamic year range
+  // Fetch dynamic year range (must be before totalStats which depends on it)
   const { data: yearRange } = useQuery({
     queryKey: ['year-range'],
     queryFn: async () => {
@@ -158,6 +136,37 @@ export default function Dashboard() {
       if (error) throw error;
       return data?.[0] as { min_year: number; max_year: number } | undefined;
     }
+  });
+
+  // Fetch totals with dynamic full-period calculation
+  const { data: totalStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['outlier-registry-stats', yearRange?.min_year, yearRange?.max_year, excludeInstitutional],
+    enabled: !!yearRange,
+    queryFn: async () => {
+      const totalYears = (yearRange!.max_year - yearRange!.min_year + 1);
+
+      const applyStatsFilter = (query: any) =>
+        excludeInstitutional ? query.eq('is_institutional', false) : query;
+
+      // Total count
+      const { count: totalCount, error: e1 } = await applyStatsFilter(
+        supabase.from('outlier_registry').select('*', { count: 'exact', head: true })
+      );
+      if (e1) throw e1;
+
+      // Full-period outliers (outliers in ALL years)
+      const { count: fullPeriodCount, error: e2 } = await applyStatsFilter(
+        supabase.from('outlier_registry').select('*', { count: 'exact', head: true })
+          .gte('years_as_outlier', totalYears)
+      );
+      if (e2) throw e2;
+
+      return { 
+        totalCount: totalCount || 0, 
+        fullPeriodCount: fullPeriodCount || 0, 
+        totalYears 
+      };
+    },
   });
 
   // Fetch distinct states and specialties for filter dropdowns
@@ -342,15 +351,15 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Multi-Year Outliers</CardTitle>
+            <CardTitle className="text-sm font-medium">Full-Period Outliers</CardTitle>
             <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">
-              {providersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (totalStats?.multiYearCount || 0).toLocaleString()}
+              {statsLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (totalStats?.fullPeriodCount || 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Outliers in 2+ years
+              Outliers in all {totalStats?.totalYears || '—'} years ({yearRange ? `${yearRange.min_year}–${yearRange.max_year}` : '—'})
             </p>
           </CardContent>
         </Card>
