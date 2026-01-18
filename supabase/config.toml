@@ -34,3 +34,9 @@ verify_jwt = false
 
 [functions.batch-upsert-anomalies-offline]
 verify_jwt = false
+
+[functions.batch-upsert-provider-year]
+verify_jwt = false
+
+[functions.batch-upsert-registry]
+verify_jwt = false
