@@ -569,6 +569,10 @@ export type Database = {
           full_name: string | null
           id: string
           must_change_password: boolean | null
+          privacy_accepted_at: string | null
+          privacy_accepted_version: string | null
+          terms_accepted_at: string | null
+          terms_accepted_version: string | null
           updated_at: string | null
         }
         Insert: {
@@ -580,6 +584,10 @@ export type Database = {
           full_name?: string | null
           id: string
           must_change_password?: boolean | null
+          privacy_accepted_at?: string | null
+          privacy_accepted_version?: string | null
+          terms_accepted_at?: string | null
+          terms_accepted_version?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -591,6 +599,10 @@ export type Database = {
           full_name?: string | null
           id?: string
           must_change_password?: boolean | null
+          privacy_accepted_at?: string | null
+          privacy_accepted_version?: string | null
+          terms_accepted_at?: string | null
+          terms_accepted_version?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -840,6 +852,30 @@ export type Database = {
           normalized_specialty?: string
           notes?: string | null
           raw_value?: string
+        }
+        Relationships: []
+      }
+      terms_acceptances: {
+        Row: {
+          accepted_at: string
+          id: string
+          privacy_version: string
+          terms_version: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          id?: string
+          privacy_version: string
+          terms_version: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          id?: string
+          privacy_version?: string
+          terms_version?: string
+          user_id?: string
         }
         Relationships: []
       }
