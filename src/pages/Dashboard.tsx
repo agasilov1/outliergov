@@ -83,8 +83,8 @@ export default function Dashboard() {
       query = query.in('specialty', params.specialties);
     }
     if (params.search) {
-      // Sanitize: commas break PostgREST .or() syntax (names like "Last, First")
-      const safeSearch = params.search.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      // Sanitize: commas and parentheses break PostgREST .or() syntax
+      const safeSearch = params.search.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
       if (safeSearch) {
         query = query.or(`provider_name.ilike.%${safeSearch}%,npi.ilike.%${safeSearch}%`);
       }
@@ -148,15 +148,15 @@ export default function Dashboard() {
       const applyStatsFilter = (query: any) =>
         excludeInstitutional ? query.eq('is_institutional', false) : query;
 
-      // Total count
+      // Total count (select 'npi' for lean query)
       const { count: totalCount, error: e1 } = await applyStatsFilter(
-        supabase.from('outlier_registry').select('*', { count: 'exact', head: true })
+        supabase.from('outlier_registry').select('npi', { count: 'exact', head: true })
       );
       if (e1) throw e1;
 
       // Full-period outliers (outliers in ALL years)
       const { count: fullPeriodCount, error: e2 } = await applyStatsFilter(
-        supabase.from('outlier_registry').select('*', { count: 'exact', head: true })
+        supabase.from('outlier_registry').select('npi', { count: 'exact', head: true })
           .gte('years_as_outlier', totalYears)
       );
       if (e2) throw e2;
