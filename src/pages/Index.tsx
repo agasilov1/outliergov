@@ -51,10 +51,10 @@ const Index = () => {
 
       {/* Contact */}
       <a 
-        href="mailto:info@outliergov.com" 
+        href="mailto:info@gasilov.com" 
         className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
       >
-        Contact: info@outliergov.com
+        Contact: info@gasilov.com
       </a>
 
       {/* Legal links */}
