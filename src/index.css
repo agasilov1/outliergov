@@ -198,4 +198,16 @@
   tr {
     page-break-inside: avoid;
   }
+
+  /* Print-only disclaimer banner */
+  .print-disclaimer {
+    display: block !important;
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+  }
 }
