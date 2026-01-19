@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Filter out soft-deleted users (they have deleted_at set and hashed emails)
+    const activeUsers = authUsers.users.filter(u => !u.deleted_at);
+
     // Get all user roles
     const { data: roles } = await supabaseAdmin
       .from('user_roles')
@@ -94,8 +97,8 @@ Deno.serve(async (req) => {
       roleMap.set(r.user_id, existing);
     });
 
-    // Combine user data
-    const users = authUsers.users.map(u => {
+    // Combine user data (using activeUsers instead of authUsers.users)
+    const users = activeUsers.map(u => {
       const profile = profileMap.get(u.id);
       const userRoles = roleMap.get(u.id) || [];
       const firmName = profile?.firm_id ? firmMap.get(profile.firm_id) : null;
@@ -113,7 +116,7 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`Returning ${users.length} users`);
+    console.log(`Returning ${users.length} active users (filtered ${authUsers.users.length - activeUsers.length} soft-deleted)`);
 
     return new Response(
       JSON.stringify({ users }),
