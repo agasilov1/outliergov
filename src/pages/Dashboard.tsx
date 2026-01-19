@@ -1,14 +1,17 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart3, TrendingUp, Loader2, Database } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { BarChart3, TrendingUp, Loader2, Database, Info, Save, X } from 'lucide-react';
 import { DisclaimerBanner } from '@/components/DisclaimerBanner';
 import { ProviderFilters } from '@/components/ProviderFilters';
+import { useToast } from '@/hooks/use-toast';
 import {
   Pagination,
   PaginationContent,
@@ -48,12 +51,39 @@ interface QueryParams {
 }
 
 const ITEMS_PER_PAGE = 50;
+const FILTER_STORAGE_KEY = 'outlier-dashboard-default-filters';
 
 export default function Dashboard() {
   const { user, isAdmin, roles } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
+  
+  // State for saved filter defaults (avoids localStorage in render)
+  const [hasSavedDefault, setHasSavedDefault] = useState(false);
+
+  // On mount: check for saved defaults and restore if no URL params
+  useEffect(() => {
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    setHasSavedDefault(!!saved);
+    
+    if (!location.search && saved) {
+      setSearchParams(new URLSearchParams(saved), { replace: true });
+    }
+  }, []);
+
+  const handleSaveAsDefault = () => {
+    localStorage.setItem(FILTER_STORAGE_KEY, searchParams.toString());
+    setHasSavedDefault(true);
+    toast({ title: "Filters saved as default" });
+  };
+
+  const handleClearSavedDefault = () => {
+    localStorage.removeItem(FILTER_STORAGE_KEY);
+    setHasSavedDefault(false);
+    toast({ title: "Default filters cleared" });
+  };
   
   // Read filter state from URL
   const searchQuery = searchParams.get('q') || '';
@@ -351,7 +381,19 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Full-Period Outliers</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center gap-1">
+              Full-Period Outliers
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">Providers verified as outliers in every year of the data-available window ({yearRange?.min_year || '2021'}–{yearRange?.max_year || '2023'}).</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </CardTitle>
             <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">Alert</Badge>
           </CardHeader>
           <CardContent>
@@ -408,8 +450,6 @@ export default function Dashboard() {
           </CardDescription>
           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
             <span><span className="font-medium">Data Source:</span> {yearRange ? `${yearRange.min_year}–${yearRange.max_year}` : '2022–2023'} Medicare Part B Claims</span>
-            <span className="text-muted-foreground/50">|</span>
-            <span><span className="font-medium">Last Analysis:</span> January 2025</span>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -429,6 +469,20 @@ export default function Dashboard() {
             searchQuery={searchQuery}
             onSearchChange={(q) => updateFilters({ q: q || null })}
           />
+
+          {/* Filter persistence buttons */}
+          <div className="flex gap-2 mt-2">
+            <Button variant="ghost" size="sm" onClick={handleSaveAsDefault}>
+              <Save className="mr-1 h-3 w-3" />
+              Save as default
+            </Button>
+            {hasSavedDefault && (
+              <Button variant="ghost" size="sm" onClick={handleClearSavedDefault}>
+                <X className="mr-1 h-3 w-3" />
+                Clear default
+              </Button>
+            )}
+          </div>
 
           {/* Table */}
           {providersLoading ? (
@@ -460,9 +514,37 @@ export default function Dashboard() {
                       <TableHead>NPI</TableHead>
                       <TableHead>Specialty</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead className="text-right">× Above Median</TableHead>
+                      <TableHead className="text-right">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-end gap-1 cursor-help">
+                                × Above Median
+                                <Info className="h-3 w-3 text-muted-foreground" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">The ratio of this provider's allowed amount per beneficiary compared to the median of their specialty-state peer group.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
                       <TableHead className="text-right">Max Allowed</TableHead>
-                      <TableHead className="text-center">Years Outlier</TableHead>
+                      <TableHead className="text-center">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center justify-center gap-1 cursor-help">
+                                Years Outlier
+                                <Info className="h-3 w-3 text-muted-foreground" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">Number of years this provider was verified as a top 0.5% outlier within their peer group.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

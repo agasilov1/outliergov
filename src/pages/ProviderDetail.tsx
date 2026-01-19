@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, Copy, Link2, ChevronDown } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { ProviderCharts } from '@/components/ProviderCharts';
+import { useToast } from '@/hooks/use-toast';
 import { useEffect, useMemo, useState } from 'react';
 
 interface ProviderYearMetric {
@@ -39,6 +41,8 @@ interface FlagYear {
   totalAllowedDollars: number;
   allowedPerBeneDollars: number | null;
   peerMedianPerBeneDollars: number | null;
+  peerP75PerBeneDollars: number | null;
+  peerP995PerBeneDollars: number | null;
   peerGroupSize: number | null;
   xVsPeerMedian: number | null;
   verifiedTop05: boolean;
@@ -51,6 +55,7 @@ export default function ProviderDetail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,6 +164,8 @@ export default function ProviderDetail() {
       totalAllowedDollars: centsToDoallars(row.tot_allowed_cents) || 0,
       allowedPerBeneDollars: centsToDoallars(row.allowed_per_bene_cents),
       peerMedianPerBeneDollars: row.peer_median_allowed_per_bene,  // Already in dollars
+      peerP75PerBeneDollars: row.peer_p75_allowed_per_bene,
+      peerP995PerBeneDollars: row.peer_p995_allowed_per_bene,
       peerGroupSize: row.peer_group_size,
       xVsPeerMedian: row.x_vs_peer_median,
       verifiedTop05: row.verified_top_0_5 === true,
@@ -175,6 +182,86 @@ export default function ProviderDetail() {
     if (withRatio.length === 0) return null;
     return Math.max(...withRatio.map(y => y.xVsPeerMedian!));
   }, [flagYears]);
+
+  // Get latest year for peer group snapshot (data is sorted ascending)
+  const latestYear = flagYears.length > 0 ? flagYears[flagYears.length - 1] : null;
+
+  // Top X% ranking context
+  const topPercentage = useMemo(() => {
+    const rankFromUrl = searchParams.get('rank');
+    const totalFromUrl = searchParams.get('total');
+    const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
+    const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : null;
+    if (rank && totalProviders) {
+      return ((rank / totalProviders) * 100).toFixed(1);
+    }
+    return null;
+  }, [searchParams]);
+
+  // YoY delta helper with divide-by-zero guard
+  const getYoYDelta = (currentIndex: number): number | null => {
+    if (currentIndex === 0) return null;
+    const current = flagYears[currentIndex].allowedPerBeneDollars;
+    const prev = flagYears[currentIndex - 1].allowedPerBeneDollars;
+    if (current === null || prev === null || prev === 0) return null;
+    return ((current - prev) / prev) * 100;
+  };
+
+  // Data quality flags helper
+  const getDataQualityFlags = (fy: FlagYear): { level: 'warning' | 'info'; text: string }[] => {
+    const flags: { level: 'warning' | 'info'; text: string }[] = [];
+    if (fy.beneficiaries !== null && fy.beneficiaries < 11) {
+      flags.push({ level: 'warning', text: 'Small denominator (<11 beneficiaries)' });
+    }
+    if (fy.peerGroupSize !== null && fy.peerGroupSize < 20) {
+      flags.push({ level: 'info', text: 'Small peer group (<20 providers)' });
+    }
+    return flags;
+  };
+
+  // Copy handlers
+  const handleCopyNPI = () => {
+    navigator.clipboard.writeText(provider?.npi || '');
+    toast({ title: "NPI copied to clipboard" });
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast({ title: "Link copied to clipboard" });
+  };
+
+  const handleCopyBlurb = () => {
+    const blurb = `${getProviderDisplayName()} (NPI: ${provider?.npi}) - ${bestPeerRatio?.toFixed(1) || 'N/A'}x peer median, ${yearsVerified} year(s) as outlier, ${provider?.specialty}, ${provider?.state}`;
+    navigator.clipboard.writeText(blurb);
+    toast({ title: "Summary copied to clipboard" });
+  };
+
+  // CSV export handler
+  const handleExportCSV = () => {
+    if (!provider || flagYears.length === 0) return;
+    
+    const headers = ['Year', 'Beneficiaries', 'Services', 'Total Allowed ($)', 'Allowed Per Bene ($)', 'Peer Median ($)', 'x vs Median', 'Percentile Rank', 'Verified Top 0.5%'];
+    const rows = flagYears.map(fy => [
+      fy.year,
+      fy.beneficiaries ?? '',
+      fy.services ?? '',
+      fy.totalAllowedDollars?.toFixed(2) ?? '',
+      fy.allowedPerBeneDollars?.toFixed(2) ?? '',
+      fy.peerMedianPerBeneDollars?.toFixed(2) ?? '',
+      fy.xVsPeerMedian?.toFixed(2) ?? '',
+      fy.percentile_rank?.toFixed(4) ?? '',
+      fy.verifiedTop05 ? 'Yes' : 'No'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `provider_${provider.npi}_data.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Helper: Check if peer data is available for a given row
   const getPeerDataStatus = (row: FlagYear) => {
@@ -241,6 +328,10 @@ export default function ProviderDetail() {
 
   return (
     <div className="space-y-6 print-container">
+      {/* Print-only disclaimer banner */}
+      <div className="hidden print:block print-disclaimer">
+        Statistical analysis only • Not a finding of fraud or wrongdoing • Data Source: CMS Medicare Part B • For internal screening use only
+      </div>
       {/* Header with back button and search */}
       <div className="flex items-center justify-between gap-4 no-print">
         <Button variant="ghost" onClick={handleBack}>
@@ -290,21 +381,43 @@ export default function ProviderDetail() {
                 {getProviderDisplayName()}
                 {getEntityTypeBadge()}
               </CardTitle>
-              <CardDescription className="mt-1">
-                NPI: {provider.npi} • {provider.specialty} • {provider.state}
+              <CardDescription className="mt-1 flex items-center gap-2">
+                <span>NPI: {provider.npi}</span>
+                <Button variant="ghost" size="sm" className="h-6 px-2 no-print" onClick={handleCopyNPI}>
+                  <Copy className="h-3 w-3" />
+                </Button>
+                <span>•</span>
+                <span>{provider.specialty}</span>
+                <span>•</span>
+                <span>{provider.state}</span>
               </CardDescription>
-              {/* Rank indicator - fixed wording */}
+              {/* Rank indicator with Top X% */}
               {rank && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ranked #{rank} by × above peer median among {totalProviders.toLocaleString()} verified outliers
+                  Ranked #{rank} of {totalProviders.toLocaleString()} 
+                  {topPercentage && <span className="font-medium"> (Top {topPercentage}%)</span>}
+                  {' '}by × above peer median
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {/* Export PDF button */}
+            <div className="flex items-center gap-2">
+              {/* Copy buttons */}
+              <div className="flex gap-1 no-print">
+                <Button variant="ghost" size="sm" onClick={handleCopyLink} title="Copy link">
+                  <Link2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleCopyBlurb} title="Copy summary">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              {/* Export buttons */}
+              <Button variant="outline" size="sm" onClick={handleExportCSV} className="no-print">
+                <Download className="mr-2 h-4 w-4" />
+                CSV
+              </Button>
               <Button variant="outline" size="sm" onClick={handleExportPDF} className="no-print">
                 <Download className="mr-2 h-4 w-4" />
-                Export PDF
+                PDF
               </Button>
               {/* PRIMARY BADGE: Peer ratio or fallback */}
               {bestPeerRatio ? (
@@ -386,6 +499,59 @@ export default function ProviderDetail() {
         </CardContent>
       </Card>
 
+      {/* Peer Group Snapshot Panel */}
+      {latestYear && latestYear.peerGroupSize && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Peer Group Snapshot ({latestYear.year})</CardTitle>
+            <CardDescription>Distribution within {provider.specialty}, {provider.state} peer group</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground block">Peer Group Size</span>
+                <span className="font-semibold text-lg">{latestYear.peerGroupSize?.toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Peer Median</span>
+                <span className="font-semibold text-lg">
+                  {latestYear.peerMedianPerBeneDollars !== null 
+                    ? formatCurrency(latestYear.peerMedianPerBeneDollars) 
+                    : 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Peer 75th %ile</span>
+                <span className="font-semibold text-lg">
+                  {latestYear.peerP75PerBeneDollars !== null 
+                    ? formatCurrency(latestYear.peerP75PerBeneDollars) 
+                    : 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Peer 99.5th %ile</span>
+                <span className="font-semibold text-lg">
+                  {latestYear.peerP995PerBeneDollars !== null 
+                    ? formatCurrency(latestYear.peerP995PerBeneDollars) 
+                    : 'N/A'}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t">
+              <span className="text-muted-foreground">This provider: </span>
+              <span className="font-semibold">
+                {latestYear.allowedPerBeneDollars !== null 
+                  ? formatCurrency(latestYear.allowedPerBeneDollars) 
+                  : 'N/A'}
+              </span>
+              {latestYear.xVsPeerMedian && (
+                <Badge variant="destructive" className="ml-2">{latestYear.xVsPeerMedian.toFixed(1)}× median</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Visual Charts */}
       {flagYears.length > 0 && (
         <ProviderCharts flagYears={flagYears} formatCurrency={formatCurrency} />
@@ -410,19 +576,33 @@ export default function ProviderDetail() {
                   <TableHead>Year</TableHead>
                   <TableHead className="text-right">Beneficiaries</TableHead>
                   <TableHead className="text-right">Services</TableHead>
-                  <TableHead className="text-right">Total Allowed</TableHead>
+                  <TableHead className="text-right">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center justify-end gap-1 cursor-help">
+                            Total Allowed
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Total Medicare Part B payments allowed for services rendered, before patient cost-sharing.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
                   <TableHead className="text-right">Allowed per Bene</TableHead>
                   <TableHead className="text-right">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="flex items-center justify-end gap-1 cursor-help">
-                            Peer Median (per bene)
+                            Peer Median
                             <Info className="h-3 w-3 text-muted-foreground" />
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
-                          Ratios use stored precision; values may be rounded for display
+                          <p className="max-w-xs">The median allowed amount per beneficiary across all providers in the same specialty and state.</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -446,12 +626,29 @@ export default function ProviderDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {flagYears.map(fy => {
+                {flagYears.map((fy, index) => {
                   const peerStatus = getPeerDataStatus(fy);
+                  const delta = getYoYDelta(index);
+                  const qualityFlags = getDataQualityFlags(fy);
                   
                   return (
                     <TableRow key={fy.year}>
-                      <TableCell className="font-medium">{fy.year}</TableCell>
+                      <TableCell className="font-medium">
+                        {fy.year}
+                        {qualityFlags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {qualityFlags.map((flag, i) => (
+                              <Badge 
+                                key={i} 
+                                variant={flag.level === 'warning' ? 'destructive' : 'secondary'} 
+                                className="text-xs"
+                              >
+                                {flag.text}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-mono">
                         {fy.beneficiaries !== null 
                           ? fy.beneficiaries.toLocaleString()
@@ -465,13 +662,24 @@ export default function ProviderDetail() {
                         }
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatCurrency(fy.totalAllowedDollars)}
+                        {fy.totalAllowedDollars !== null && fy.totalAllowedDollars !== undefined
+                          ? formatCurrency(fy.totalAllowedDollars)
+                          : <span className="text-muted-foreground italic">N/A</span>
+                        }
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {fy.allowedPerBeneDollars !== null 
                           ? formatCurrency(fy.allowedPerBeneDollars)
                           : <span className="text-muted-foreground italic">N/A</span>
                         }
+                        {delta !== null && (
+                          <Badge 
+                            variant={delta > 0 ? "destructive" : "secondary"} 
+                            className="ml-2 text-xs"
+                          >
+                            {delta > 0 ? '+' : ''}{delta.toFixed(0)}% YoY
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {peerStatus.available ? (
@@ -491,15 +699,24 @@ export default function ProviderDetail() {
                       </TableCell>
                       <TableCell className="text-center">
                         {fy.verifiedTop05 ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-destructive" />
-                            <span className="text-sm text-muted-foreground">
-                              Top 0.5% (Verified)
-                            </span>
-                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center justify-center gap-2 cursor-help">
+                                  <CheckCircle2 className="h-4 w-4 text-destructive" />
+                                  <span className="text-sm text-muted-foreground">
+                                    Top 0.5%
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs">This provider's per-beneficiary allowed amount exceeded the 99.5th percentile of their peer group.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : (
                           <span className="text-muted-foreground text-sm">
-                            Top {((1 - fy.percentile_rank) * 100).toFixed(2)}% (Not verified)
+                            Top {((1 - fy.percentile_rank) * 100).toFixed(2)}%
                           </span>
                         )}
                       </TableCell>
@@ -510,6 +727,52 @@ export default function ProviderDetail() {
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {/* Source-of-Truth Panel (Collapsible) */}
+      {flagYears.length > 0 && (
+        <Collapsible className="border rounded-lg p-4">
+          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+            <span className="text-sm font-medium flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              Source Data Fields (CMS)
+            </span>
+            <ChevronDown className="h-4 w-4" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-3">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Year</TableHead>
+                  <TableHead className="text-right">Tot_Benes</TableHead>
+                  <TableHead className="text-right">Tot_Srvcs</TableHead>
+                  <TableHead className="text-right">Tot_Mdcr_Alowd_Amt</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flagYears.map(fy => (
+                  <TableRow key={fy.year}>
+                    <TableCell>{fy.year}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {fy.beneficiaries !== null ? fy.beneficiaries.toLocaleString() : 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {fy.services !== null ? fy.services.toLocaleString() : 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {fy.totalAllowedDollars !== null && fy.totalAllowedDollars !== undefined
+                        ? `$${fy.totalAllowedDollars.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                        : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="text-xs text-muted-foreground mt-2">
+              Field names match CMS Medicare Part B Public Use File schema
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* Possible Explanations */}
