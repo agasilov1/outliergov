@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
+import { ProviderCharts } from '@/components/ProviderCharts';
 import { useEffect, useMemo, useState } from 'react';
 
 interface ProviderYearMetric {
@@ -384,6 +385,11 @@ export default function ProviderDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Visual Charts */}
+      {flagYears.length > 0 && (
+        <ProviderCharts flagYears={flagYears} formatCurrency={formatCurrency} />
+      )}
 
       {/* Per-Year Breakdown Table */}
       {flagYears.length > 0 && (
