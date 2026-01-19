@@ -329,16 +329,32 @@ export default function Admin() {
       
       // Extract error message from either error object or data response
       if (error) {
-        // Try to parse the error context for the actual message
-        const errorMsg = error.message || 'Failed to delete firm';
+        let errorMessage = error.message || 'Failed to delete firm';
+        
+        // Try to extract detailed error from function response body
+        try {
+          // supabase-js FunctionsHttpError may have context with response body
+          const context = (error as { context?: { body?: string } }).context;
+          if (context?.body) {
+            const body = typeof context.body === 'string' ? JSON.parse(context.body) : context.body;
+            if (body?.error) {
+              errorMessage = body.error;
+              if (body.step) errorMessage += ` (step: ${body.step})`;
+              if (body.failedUserEmailRedacted) errorMessage += ` - user: ${body.failedUserEmailRedacted}`;
+            }
+          }
+        } catch {
+          // Parsing failed, use original error.message
+        }
+        
         console.error('Function error:', error);
-        throw new Error(errorMsg);
+        throw new Error(errorMessage);
       }
       
       if (!data?.success) {
         // Handle partial failure or full failure with detailed message
         const detailedError = data?.error || 'Unknown error';
-        const failedEmail = data?.failedUserEmail;
+        const failedEmail = data?.failedUserEmailRedacted || data?.failedUserEmail;
         const step = data?.step;
         
         if (data?.deletedUserIds?.length > 0) {

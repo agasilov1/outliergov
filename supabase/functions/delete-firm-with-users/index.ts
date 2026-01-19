@@ -1,6 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreflightSafe } from '../_shared/cors.ts';
 
+// Redact email for logs and responses: "goon@goon.com" -> "g***@goon.com"
+function redactEmail(email: string | null | undefined): string {
+  if (!email || !email.includes('@')) return '***@***';
+  const [local, domain] = email.split('@');
+  const redactedLocal = local.length > 1 ? local[0] + '***' : '***';
+  return `${redactedLocal}@${domain}`;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   const corsResponse = handleCorsPreflightSafe(req);
@@ -14,7 +22,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
+        JSON.stringify({ success: false, error: 'Authorization header required' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -32,7 +40,7 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -50,7 +58,7 @@ Deno.serve(async (req) => {
 
     if (!adminCheck) {
       return new Response(
-        JSON.stringify({ error: 'Admin access required' }),
+        JSON.stringify({ success: false, error: 'Admin access required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -60,7 +68,7 @@ Deno.serve(async (req) => {
 
     if (!firm_id || !confirm_name) {
       return new Response(
-        JSON.stringify({ error: 'firm_id and confirm_name are required' }),
+        JSON.stringify({ success: false, error: 'firm_id and confirm_name are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -74,7 +82,7 @@ Deno.serve(async (req) => {
 
     if (firmFetchError || !firm) {
       return new Response(
-        JSON.stringify({ error: 'Firm not found' }),
+        JSON.stringify({ success: false, error: 'Firm not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -82,7 +90,7 @@ Deno.serve(async (req) => {
     // Verify confirm_name matches exactly
     if (firm.name !== confirm_name) {
       return new Response(
-        JSON.stringify({ error: 'Confirmation name does not match firm name' }),
+        JSON.stringify({ success: false, error: 'Confirmation name does not match firm name' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -95,7 +103,7 @@ Deno.serve(async (req) => {
 
     if (usersError) {
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch firm users' }),
+        JSON.stringify({ success: false, error: 'Failed to fetch firm users', step: 'fetch_users' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -107,7 +115,7 @@ Deno.serve(async (req) => {
     // Check if caller is in the firm (cannot delete your own account)
     if (firmUserIds.includes(user.id)) {
       return new Response(
-        JSON.stringify({ error: 'Cannot delete firm containing your own account' }),
+        JSON.stringify({ success: false, error: 'Cannot delete firm containing your own account' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -122,69 +130,112 @@ Deno.serve(async (req) => {
 
       if (adminUsers && adminUsers.length > 0) {
         return new Response(
-          JSON.stringify({ error: 'Cannot delete firm: contains admin user(s)' }),
+          JSON.stringify({ success: false, error: 'Cannot delete firm: contains admin user(s)' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
 
-    // DELETE USERS - AUTH FIRST, FAIL FAST
+    // DELETE USERS - PUBLIC DATA FIRST, THEN AUTH, FAIL FAST
     const deletedUserIds: string[] = [];
 
     for (const firmUser of firmUsers || []) {
+      const redacted = redactEmail(firmUser.email);
+      
       try {
-        console.log(`[delete-firm] Processing user: ${firmUser.email} (${firmUser.id})`);
+        console.log(`[delete-firm] Processing user: ${redacted} (${firmUser.id})`);
         
-        // 1. CHECK IF AUTH USER EXISTS before trying to delete
+        // STEP 1: Delete public data first (terms_acceptances, user_roles, profiles)
+        
+        // 1a. Delete from terms_acceptances
+        const { error: termsError } = await adminClient
+          .from('terms_acceptances')
+          .delete()
+          .eq('user_id', firmUser.id);
+        if (termsError) {
+          console.error(`[delete-firm] Terms delete failed for ${redacted}:`, termsError.message);
+          throw { step: 'terms_delete', message: `Terms deletion failed: ${termsError.message}` };
+        }
+
+        // 1b. Delete from user_roles
+        const { error: rolesError } = await adminClient
+          .from('user_roles')
+          .delete()
+          .eq('user_id', firmUser.id);
+        if (rolesError) {
+          console.error(`[delete-firm] Roles delete failed for ${redacted}:`, rolesError.message);
+          throw { step: 'roles_delete', message: `Roles deletion failed: ${rolesError.message}` };
+        }
+
+        // 1c. Delete from profiles
+        const { error: profilesError } = await adminClient
+          .from('profiles')
+          .delete()
+          .eq('id', firmUser.id);
+        if (profilesError) {
+          console.error(`[delete-firm] Profile delete failed for ${redacted}:`, profilesError.message);
+          throw { step: 'profile_delete', message: `Profile deletion failed: ${profilesError.message}` };
+        }
+
+        console.log(`[delete-firm] Public data deleted for ${redacted}`);
+
+        // STEP 2: Check if auth user exists (strict check)
         const { data: existingUser, error: getUserError } = await adminClient.auth.admin.getUserById(firmUser.id);
         
         if (getUserError) {
-          console.log(`[delete-firm] getUserById error for ${firmUser.email}: ${getUserError.message}`);
-        }
-        
-        if (existingUser?.user) {
-          // Auth user exists - delete it
-          console.log(`[delete-firm] Auth user exists, deleting: ${firmUser.email}`);
-          const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(firmUser.id);
-          if (authDeleteError) {
-            console.error(`[delete-firm] Auth delete failed for ${firmUser.email}:`, authDeleteError);
-            throw new Error(`Auth deletion failed: ${authDeleteError.message}`);
+          // Check if it's specifically a "not found" error
+          const errorMsg = getUserError.message?.toLowerCase() || '';
+          const isNotFound = errorMsg.includes('not found') || 
+                            errorMsg.includes('user not found') ||
+                            errorMsg.includes('no user found');
+          
+          if (isNotFound) {
+            console.log(`[delete-firm] Auth user ${firmUser.id} not found (already deleted), skipping auth delete`);
+            // Continue - user doesn't exist in auth, that's fine
+          } else {
+            // Generic error - DO NOT skip, this could mask an outage
+            console.error(`[delete-firm] Auth check failed for ${redacted}: ${getUserError.message}`);
+            throw { step: 'auth_check', message: `Failed to verify auth user: ${getUserError.message}` };
           }
-          console.log(`[delete-firm] Auth user deleted: ${firmUser.email}`);
+        } else if (!existingUser?.user) {
+          // User is null - treat as not found
+          console.log(`[delete-firm] Auth user ${firmUser.id} returned null, skipping auth delete`);
         } else {
-          // Auth user doesn't exist (orphaned profile) - skip auth deletion, proceed with cleanup
-          console.log(`[delete-firm] Auth user not found for ${firmUser.email}, proceeding with data cleanup`);
-        }
-
-        // 2. Delete profile row
-        const { error: profileError } = await adminClient.from('profiles').delete().eq('id', firmUser.id);
-        if (profileError) {
-          console.error(`[delete-firm] Profile delete failed for ${firmUser.email}:`, profileError);
-          throw new Error(`Profile deletion failed: ${profileError.message}`);
-        }
-
-        // 3. Delete user_roles rows
-        const { error: rolesError } = await adminClient.from('user_roles').delete().eq('user_id', firmUser.id);
-        if (rolesError) {
-          console.error(`[delete-firm] Roles delete failed for ${firmUser.email}:`, rolesError);
-          throw new Error(`Roles deletion failed: ${rolesError.message}`);
-        }
-
-        // 4. Delete terms_acceptances rows (cleanup)
-        const { error: termsError } = await adminClient.from('terms_acceptances').delete().eq('user_id', firmUser.id);
-        if (termsError) {
-          console.error(`[delete-firm] Terms delete failed for ${firmUser.email}:`, termsError);
-          throw new Error(`Terms deletion failed: ${termsError.message}`);
+          // Auth user exists - proceed with deletion
+          console.log(`[delete-firm] Auth user exists, attempting hard delete for ${redacted}`);
+          
+          const { error: hardDeleteError } = await adminClient.auth.admin.deleteUser(firmUser.id);
+          
+          if (hardDeleteError) {
+            console.error(`[delete-firm] Hard delete failed for ${redacted}: ${hardDeleteError.message}`);
+            
+            // Try soft delete as fallback
+            console.log(`[delete-firm] Attempting soft delete fallback for ${redacted}`);
+            const { error: softDeleteError } = await adminClient.auth.admin.deleteUser(firmUser.id, true);
+            
+            if (softDeleteError) {
+              console.error(`[delete-firm] Soft delete also failed for ${redacted}: ${softDeleteError.message}`);
+              throw { step: 'auth_delete', message: `Auth deletion failed (hard: ${hardDeleteError.message}, soft: ${softDeleteError.message})` };
+            } else {
+              console.log(`[delete-firm] Soft delete succeeded for ${redacted}`);
+            }
+          } else {
+            console.log(`[delete-firm] Auth user hard deleted: ${redacted}`);
+          }
         }
 
         deletedUserIds.push(firmUser.id);
-        console.log(`[delete-firm] User fully deleted: ${firmUser.email}`);
+        console.log(`[delete-firm] User fully deleted: ${redacted}`);
+        
       } catch (err) {
         // FAIL FAST - stop immediately, do NOT delete firm
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[delete-firm] FAILURE for ${firmUser.email}:`, err);
+        const step = (err as { step?: string })?.step || 'user_deletion';
+        const errorMessage = (err as { message?: string })?.message || 
+                            (err instanceof Error ? err.message : 'Unknown error');
+        
+        console.error(`[delete-firm] FAILURE for ${redacted} at step ${step}:`, errorMessage);
 
-        // Try to log failure (non-fatal)
+        // Try to log failure (non-fatal) - use redacted email in audit
         try {
           await adminClient.from('audit_log').insert({
             user_id: user.id,
@@ -195,8 +246,9 @@ Deno.serve(async (req) => {
               firm_name: firm.name,
               deleted_user_ids: deletedUserIds,
               failed_user_id: firmUser.id,
-              failed_user_email: firmUser.email,
+              step,
               error: errorMessage
+              // No raw email stored
             }
           });
         } catch (auditErr) {
@@ -206,11 +258,11 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Failed to delete user ${firmUser.email}: ${errorMessage}`,
-            step: 'user_deletion',
+            error: `Failed to delete user at step "${step}": ${errorMessage}`,
+            step,
             deletedUserIds,
             failedUserId: firmUser.id,
-            failedUserEmail: firmUser.email,
+            failedUserEmailRedacted: redacted,
             firmDeleted: false
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -247,6 +299,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: false,
           error: 'Users deleted but firm deletion failed: ' + firmDeleteError.message,
+          step: 'firm_delete',
           deletedUserIds,
           firmDeleted: false
         }),
@@ -285,7 +338,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('Unexpected error:', err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ success: false, error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
