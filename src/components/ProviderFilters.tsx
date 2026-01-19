@@ -192,11 +192,6 @@ export function ProviderFilters({
           </Button>
         )}
       </div>
-      
-      {/* Results count */}
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} verified outliers
-      </div>
     </div>
   );
 }
