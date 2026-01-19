@@ -107,9 +107,43 @@ export default function ProviderDetail() {
     return () => clearTimeout(timeout);
   }, [searchQuery]);
 
-  // Export PDF handler
+  // Slugify helper for safe filenames
+  const slugifyFilename = (s: string) =>
+    (s.normalize?.("NFKD") ?? s)
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/,+/g, "_")
+      .replace(/_+/g, "_")
+      .trim()
+      .slice(0, 120);
+
+  // Export PDF handler - dynamic filename based on provider
   const handleExportPDF = () => {
-    window.print();
+    const originalTitle = document.title;
+
+    try {
+      const npiStr = provider?.npi || "provider";
+      const name = provider ? getProviderDisplayName() : "";
+      const base = name ? `${npiStr}_${name}` : npiStr;
+      const filename = slugifyFilename(base);
+
+      const restore = () => {
+        document.title = originalTitle;
+        window.removeEventListener("afterprint", restore);
+      };
+
+      window.addEventListener("afterprint", restore);
+
+      document.title = filename;
+
+      window.print();
+
+      // Fallback: some browsers do not fire afterprint reliably
+      setTimeout(restore, 2000);
+    } catch {
+      document.title = originalTitle;
+      window.print();
+    }
   };
 
   // Handle back navigation - preserve query string
