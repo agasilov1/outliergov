@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,50 +17,50 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleAccept = async () => {
-    if (!user || !agreed) return;
+  const handleCheckboxChange = async (checked: boolean | 'indeterminate') => {
+    if (checked === true && user) {
+      setAgreed(true);
+      setSubmitting(true);
 
-    setSubmitting(true);
-    try {
-      const now = new Date().toISOString();
+      try {
+        const now = new Date().toISOString();
 
-      // Insert acceptance record
-      const { error: insertError } = await supabase
-        .from('terms_acceptances')
-        .insert({
-          user_id: user.id,
-          terms_version: TERMS_VERSION,
-          privacy_version: PRIVACY_VERSION,
-        });
+        // Insert acceptance record
+        const { error: insertError } = await supabase
+          .from('terms_acceptances')
+          .insert({
+            user_id: user.id,
+            terms_version: TERMS_VERSION,
+            privacy_version: PRIVACY_VERSION,
+          });
 
-      if (insertError) {
-        // If duplicate key error, that's fine - user already accepted this version
-        if (!insertError.message.includes('duplicate key')) {
+        if (insertError && !insertError.message.includes('duplicate key')) {
           throw insertError;
         }
+
+        // Update profile with accepted versions for quick lookup
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            terms_accepted_version: TERMS_VERSION,
+            terms_accepted_at: now,
+            privacy_accepted_version: PRIVACY_VERSION,
+            privacy_accepted_at: now,
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        onAccepted();
+      } catch (error) {
+        console.error('Failed to record terms acceptance:', error);
+        toast.error('Failed to save acceptance. Please try again.');
+        setAgreed(false);
+      } finally {
+        setSubmitting(false);
       }
-
-      // Update profile with accepted versions for quick lookup
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          terms_accepted_version: TERMS_VERSION,
-          terms_accepted_at: now,
-          privacy_accepted_version: PRIVACY_VERSION,
-          privacy_accepted_at: now,
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      onAccepted();
-    } catch (error) {
-      console.error('Failed to record terms acceptance:', error);
-      toast.error('Failed to save acceptance. Please try again.');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -107,11 +106,11 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
             </li>
           </ul>
 
-          <div className="flex items-start space-x-3 pt-2">
+          <div className="flex items-center space-x-3 pt-2">
             <Checkbox
               id="agree"
               checked={agreed}
-              onCheckedChange={(checked) => setAgreed(checked === true)}
+              onCheckedChange={handleCheckboxChange}
               disabled={submitting}
             />
             <Label
@@ -120,23 +119,9 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
             >
               I have read and agree to the Terms of Service and Privacy Policy
             </Label>
+            {submitting && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         </div>
-
-        <Button
-          onClick={handleAccept}
-          disabled={!agreed || submitting}
-          className="w-full mt-4"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Accept and Continue'
-          )}
-        </Button>
       </DialogContent>
     </Dialog>
   );
