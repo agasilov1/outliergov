@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, Copy, Link2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { ProviderCharts } from '@/components/ProviderCharts';
 import { useToast } from '@/hooks/use-toast';
@@ -219,22 +219,6 @@ export default function ProviderDetail() {
     return flags;
   };
 
-  // Copy handlers
-  const handleCopyNPI = () => {
-    navigator.clipboard.writeText(provider?.npi || '');
-    toast({ title: "NPI copied to clipboard" });
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast({ title: "Link copied to clipboard" });
-  };
-
-  const handleCopyBlurb = () => {
-    const blurb = `${getProviderDisplayName()} (NPI: ${provider?.npi}) - ${bestPeerRatio?.toFixed(1) || 'N/A'}x peer median, ${yearsVerified} year(s) as outlier, ${provider?.specialty}, ${provider?.state}`;
-    navigator.clipboard.writeText(blurb);
-    toast({ title: "Summary copied to clipboard" });
-  };
 
   // CSV escape helper - wraps fields containing commas, quotes, or newlines
   const escapeCSV = (value: string | number | null | undefined): string => {
@@ -399,9 +383,6 @@ export default function ProviderDetail() {
               </CardTitle>
               <CardDescription className="mt-1 flex items-center gap-2">
                 <span>NPI: {provider.npi}</span>
-                <Button variant="ghost" size="sm" className="h-6 px-2 no-print" onClick={handleCopyNPI}>
-                  <Copy className="h-3 w-3" />
-                </Button>
                 <span>•</span>
                 <span>{provider.specialty}</span>
                 <span>•</span>
@@ -417,15 +398,6 @@ export default function ProviderDetail() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {/* Copy buttons */}
-              <div className="flex gap-1 no-print">
-                <Button variant="ghost" size="sm" onClick={handleCopyLink} title="Copy link">
-                  <Link2 className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCopyBlurb} title="Copy summary">
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
               {/* Export buttons */}
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="no-print">
                 <Download className="mr-2 h-4 w-4" />
