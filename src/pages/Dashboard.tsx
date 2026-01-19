@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { BarChart3, TrendingUp, Loader2, Database, Info, Save, X } from 'lucide-react';
-import { DisclaimerBanner } from '@/components/DisclaimerBanner';
+
 import { ProviderFilters } from '@/components/ProviderFilters';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -323,8 +323,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Disclaimer Banner */}
-      <DisclaimerBanner variant="detailed" />
 
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Outlier Provider Rankings</h1>
