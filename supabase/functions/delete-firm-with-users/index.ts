@@ -133,23 +133,56 @@ Deno.serve(async (req) => {
 
     for (const firmUser of firmUsers || []) {
       try {
-        // 1. DELETE AUTH USER FIRST (most likely to fail)
-        const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(firmUser.id);
-        if (authDeleteError) throw authDeleteError;
+        console.log(`[delete-firm] Processing user: ${firmUser.email} (${firmUser.id})`);
+        
+        // 1. CHECK IF AUTH USER EXISTS before trying to delete
+        const { data: existingUser, error: getUserError } = await adminClient.auth.admin.getUserById(firmUser.id);
+        
+        if (getUserError) {
+          console.log(`[delete-firm] getUserById error for ${firmUser.email}: ${getUserError.message}`);
+        }
+        
+        if (existingUser?.user) {
+          // Auth user exists - delete it
+          console.log(`[delete-firm] Auth user exists, deleting: ${firmUser.email}`);
+          const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(firmUser.id);
+          if (authDeleteError) {
+            console.error(`[delete-firm] Auth delete failed for ${firmUser.email}:`, authDeleteError);
+            throw new Error(`Auth deletion failed: ${authDeleteError.message}`);
+          }
+          console.log(`[delete-firm] Auth user deleted: ${firmUser.email}`);
+        } else {
+          // Auth user doesn't exist (orphaned profile) - skip auth deletion, proceed with cleanup
+          console.log(`[delete-firm] Auth user not found for ${firmUser.email}, proceeding with data cleanup`);
+        }
 
-        // 2. Delete profile row (only after auth succeeded)
-        await adminClient.from('profiles').delete().eq('id', firmUser.id);
+        // 2. Delete profile row
+        const { error: profileError } = await adminClient.from('profiles').delete().eq('id', firmUser.id);
+        if (profileError) {
+          console.error(`[delete-firm] Profile delete failed for ${firmUser.email}:`, profileError);
+          throw new Error(`Profile deletion failed: ${profileError.message}`);
+        }
 
         // 3. Delete user_roles rows
-        await adminClient.from('user_roles').delete().eq('user_id', firmUser.id);
+        const { error: rolesError } = await adminClient.from('user_roles').delete().eq('user_id', firmUser.id);
+        if (rolesError) {
+          console.error(`[delete-firm] Roles delete failed for ${firmUser.email}:`, rolesError);
+          throw new Error(`Roles deletion failed: ${rolesError.message}`);
+        }
 
         // 4. Delete terms_acceptances rows (cleanup)
-        await adminClient.from('terms_acceptances').delete().eq('user_id', firmUser.id);
+        const { error: termsError } = await adminClient.from('terms_acceptances').delete().eq('user_id', firmUser.id);
+        if (termsError) {
+          console.error(`[delete-firm] Terms delete failed for ${firmUser.email}:`, termsError);
+          throw new Error(`Terms deletion failed: ${termsError.message}`);
+        }
 
         deletedUserIds.push(firmUser.id);
+        console.log(`[delete-firm] User fully deleted: ${firmUser.email}`);
       } catch (err) {
         // FAIL FAST - stop immediately, do NOT delete firm
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[delete-firm] FAILURE for ${firmUser.email}:`, err);
 
         // Try to log failure (non-fatal)
         try {
@@ -174,11 +207,13 @@ Deno.serve(async (req) => {
           JSON.stringify({
             success: false,
             error: `Failed to delete user ${firmUser.email}: ${errorMessage}`,
+            step: 'user_deletion',
             deletedUserIds,
             failedUserId: firmUser.id,
+            failedUserEmail: firmUser.email,
             firmDeleted: false
           }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
