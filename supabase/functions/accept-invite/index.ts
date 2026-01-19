@@ -8,19 +8,22 @@ Deno.serve(async (req) => {
 
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
+  // SECURITY: Only accept POST requests to prevent token leakage in URLs/logs
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed. Use POST with token in body.' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
-    // Get token from query params or body
-    const url = new URL(req.url);
-    let token = url.searchParams.get('token');
-    
-    if (!token && req.method === 'POST') {
-      const body = await req.json();
-      token = body.token;
-    }
+    // SECURITY: Only accept token from POST body - never from URL query params
+    const body = await req.json();
+    const token = body.token;
 
     if (!token) {
       return new Response(
-        JSON.stringify({ error: 'Invitation token is required' }),
+        JSON.stringify({ error: 'Invitation token is required in request body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

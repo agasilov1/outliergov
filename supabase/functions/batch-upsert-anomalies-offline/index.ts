@@ -8,6 +8,15 @@ Deno.serve(async (req) => {
 
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
+  // SECURITY: Require ingest token for authentication
+  const token = req.headers.get("x-ingest-token");
+  if (!token || token !== Deno.env.get("INGEST_TOKEN")) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
