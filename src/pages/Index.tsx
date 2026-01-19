@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
@@ -38,8 +38,8 @@ const Index = () => {
       {/* Main statement */}
       <div className="max-w-2xl text-center mb-8">
         <p className="text-xl text-muted-foreground leading-relaxed">
-          OutlierGov identifies healthcare providers whose Medicare billing consistently 
-          falls within the most extreme 0.5% of their specialty and state, across multiple years.
+          OutlierGov identifies providers whose Medicare allowed amount per beneficiary 
+          is persistently extreme (top 0.5%) relative to specialty and state peers, across multiple years.
         </p>
       </div>
 
@@ -48,6 +48,25 @@ const Index = () => {
         Sign In
         <ArrowRight className="h-4 w-4" />
       </Button>
+
+      {/* Contact */}
+      <a 
+        href="mailto:info@outliergov.com" 
+        className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
+      >
+        Contact: info@outliergov.com
+      </a>
+
+      {/* Legal links */}
+      <div className="mt-4 flex justify-center gap-4 text-sm text-muted-foreground">
+        <Link to="/privacy" className="underline hover:text-foreground">
+          Privacy Policy
+        </Link>
+        <span>•</span>
+        <Link to="/terms" className="underline hover:text-foreground">
+          Terms of Service
+        </Link>
+      </div>
     </div>
   );
 };

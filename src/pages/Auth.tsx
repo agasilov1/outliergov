@@ -217,9 +217,9 @@ export default function Auth() {
       </Card>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        This tool surfaces statistical anomalies in public data.
+        This tool surfaces statistical outliers in public CMS data for screening and prioritization.
         <br />
-        It does not allege fraud or wrongdoing.
+        It does not allege fraud, illegality, or wrongdoing.
       </p>
 
       <div className="mt-4 flex justify-center gap-4 text-sm text-muted-foreground">
