@@ -59,6 +59,11 @@ export default function Methodology() {
             <p className="mt-2 text-sm text-muted-foreground">
               Rankings are by multiples above the peer median (per-beneficiary allowed amount), not by percentile rank.
             </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              <strong>Note on Suppression:</strong> Rows with suppressed or missing beneficiary counts (per CMS cell-size 
+              suppression rules) cannot be evaluated on a per-beneficiary basis and are excluded from verification. This 
+              ensures statistical validity but may exclude some providers from the registry.
+            </p>
           </div>
 
           <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">

@@ -88,6 +88,22 @@ export default function Privacy() {
 
       <Card>
         <CardHeader>
+          <CardTitle>No Protected Health Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            We do not collect, process, or store Protected Health Information (PHI) as defined by HIPAA or any similar regulations.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Users must not upload, transmit, or otherwise provide sensitive personal or health information through the Service</li>
+            <li>The platform analyzes only de-identified public datasets released by government agencies</li>
+            <li>No individually identifiable health information is collected from users or derived from platform usage</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Data Sharing</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
@@ -99,12 +115,42 @@ export default function Privacy() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Subprocessors</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            We use the following categories of third-party service providers to operate the Service:
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li><strong>Infrastructure:</strong> Cloud hosting and database services</li>
+            <li><strong>Authentication:</strong> Identity management and access control services</li>
+            <li><strong>Analytics:</strong> Usage monitoring and performance optimization services</li>
+          </ul>
+          <p>
+            For a complete list of subprocessors, contact us at{' '}
+            <a
+              href="mailto:info@gasilov.com"
+              className="text-primary underline hover:text-primary/80"
+            >
+              info@gasilov.com
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Data Retention</CardTitle>
         </CardHeader>
-        <CardContent className="text-muted-foreground">
+        <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            Information is retained only as long as necessary to operate the Service, comply with legal requirements, and maintain auditability.
+            We retain information for specific periods based on operational and legal requirements:
           </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li><strong>Audit logs:</strong> Retained for two (2) years for security and compliance purposes</li>
+            <li><strong>Account information:</strong> Retained for the duration of your account plus one (1) year after account closure</li>
+            <li><strong>Terms acceptance records:</strong> Retained indefinitely for legal compliance and dispute resolution</li>
+          </ul>
         </CardContent>
       </Card>
 
