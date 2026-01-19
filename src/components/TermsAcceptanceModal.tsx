@@ -68,7 +68,7 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
   return (
     <Dialog open={true}>
       <DialogContent 
-        className="sm:max-w-md [&>button]:hidden" 
+        className="sm:max-w-md [&>button]:hidden max-h-[85vh] flex flex-col" 
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -79,7 +79,7 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1">
           <p className="text-sm text-muted-foreground">
             Before continuing, please review our updated legal agreements:
           </p>
@@ -126,7 +126,7 @@ export function TermsAcceptanceModal({ onAccepted }: TermsAcceptanceModalProps) 
         <Button
           onClick={handleAccept}
           disabled={!agreed || submitting}
-          className="w-full"
+          className="w-full mt-4"
         >
           {submitting ? (
             <>
