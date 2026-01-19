@@ -42,4 +42,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.delete-firm-with-users]
-verify_jwt = true
+verify_jwt = false
