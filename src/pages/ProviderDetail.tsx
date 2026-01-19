@@ -236,12 +236,26 @@ export default function ProviderDetail() {
     toast({ title: "Summary copied to clipboard" });
   };
 
+  // CSV escape helper - wraps fields containing commas, quotes, or newlines
+  const escapeCSV = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
   // CSV export handler
   const handleExportCSV = () => {
     if (!provider || flagYears.length === 0) return;
     
-    const headers = ['Year', 'Beneficiaries', 'Services', 'Total Allowed ($)', 'Allowed Per Bene ($)', 'Peer Median ($)', 'x vs Median', 'Percentile Rank', 'Verified Top 0.5%'];
+    const headers = ['Provider Name', 'NPI', 'Specialty', 'State', 'Year', 'Beneficiaries', 'Services', 'Total Allowed ($)', 'Allowed Per Bene ($)', 'Peer Median ($)', 'x vs Median', 'Percentile Rank', 'Verified Top 0.5%'];
     const rows = flagYears.map(fy => [
+      escapeCSV(getProviderDisplayName()),
+      escapeCSV(provider.npi),
+      escapeCSV(provider.specialty),
+      escapeCSV(provider.state),
       fy.year,
       fy.beneficiaries ?? '',
       fy.services ?? '',
@@ -253,7 +267,9 @@ export default function ProviderDetail() {
       fy.verifiedTop05 ? 'Yes' : 'No'
     ]);
     
-    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const csvContent = [headers.map(h => escapeCSV(h)), ...rows].map(row => 
+      row.map(cell => escapeCSV(cell)).join(',')
+    ).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
