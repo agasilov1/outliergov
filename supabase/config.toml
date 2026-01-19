@@ -40,3 +40,6 @@ verify_jwt = false
 
 [functions.batch-upsert-registry]
 verify_jwt = false
+
+[functions.delete-firm-with-users]
+verify_jwt = true

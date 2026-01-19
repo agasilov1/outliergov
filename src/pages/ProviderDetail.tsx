@@ -422,7 +422,7 @@ export default function ProviderDetail() {
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
-                          Rounded for display; ratios use exact values
+                          Ratios use stored precision; values may be rounded for display
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
