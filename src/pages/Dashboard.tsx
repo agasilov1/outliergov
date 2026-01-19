@@ -629,14 +629,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Watermark footer for screenshot protection */}
-      <div className="text-center text-xs text-muted-foreground py-4 border-t space-y-1">
-        <p>Statistical analysis • Public data • Not a finding of wrongdoing</p>
-        <p className="text-muted-foreground/70">
-          Outputs are for internal analysis and screening only and may not be publicly 
-          distributed or presented as factual findings.
-        </p>
-      </div>
     </div>
   );
 }
