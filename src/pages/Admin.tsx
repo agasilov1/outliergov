@@ -106,6 +106,7 @@ export default function Admin() {
   const [expiringFirmId, setExpiringFirmId] = useState<string | null>(null);
   const [deletingFirmId, setDeletingFirmId] = useState<string | null>(null);
   const [firmToDelete, setFirmToDelete] = useState<Firm | null>(null);
+  const [firmDeleteConfirmation, setFirmDeleteConfirmation] = useState('');
 
   // Data state
   const [users, setUsers] = useState<User[]>([]);
@@ -315,34 +316,36 @@ export default function Admin() {
   }
 
   async function handleDeleteFirm() {
-    if (!firmToDelete) return;
+    if (!firmToDelete || firmDeleteConfirmation !== firmToDelete.name) return;
     
     setDeletingFirmId(firmToDelete.id);
     try {
-      // First, unassign users from this firm
-      const { error: unassignError } = await supabase
-        .from('profiles')
-        .update({ firm_id: null })
-        .eq('firm_id', firmToDelete.id);
+      const { data, error } = await supabase.functions.invoke('delete-firm-with-users', {
+        body: { 
+          firm_id: firmToDelete.id,
+          confirm_name: firmDeleteConfirmation
+        }
+      });
       
-      if (unassignError) {
-        console.error('Error unassigning users:', unassignError);
+      if (error) throw new Error(error.message || 'Failed to delete firm');
+      
+      if (!data?.success) {
+        // Handle partial failure
+        if (data?.deletedUserIds?.length > 0) {
+          toast.warning(`Partial deletion: ${data.deletedUserIds.length} user(s) deleted, but firm deletion failed. ${data.error}`);
+        } else {
+          throw new Error(data?.error || 'Failed to delete firm');
+        }
+      } else {
+        toast.success(`Firm "${firmToDelete.name}" and ${data.deletedUserCount || 0} user(s) permanently deleted`);
       }
       
-      // Then delete the firm
-      const { error } = await supabase
-        .from('firms')
-        .delete()
-        .eq('id', firmToDelete.id);
-      
-      if (error) throw error;
-      
-      toast.success(`Firm "${firmToDelete.name}" deleted`);
       setFirmToDelete(null);
+      setFirmDeleteConfirmation('');
       loadData();
     } catch (error) {
       console.error('Error deleting firm:', error);
-      toast.error('Failed to delete firm');
+      toast.error(error instanceof Error ? error.message : 'Failed to delete firm');
     } finally {
       setDeletingFirmId(null);
     }
@@ -508,49 +511,71 @@ export default function Admin() {
       </Dialog>
 
       {/* Delete Firm Confirmation Modal */}
-      <Dialog open={!!firmToDelete} onOpenChange={(open) => !open && setFirmToDelete(null)}>
+      <Dialog open={!!firmToDelete} onOpenChange={(open) => {
+        if (!open) {
+          setFirmToDelete(null);
+          setFirmDeleteConfirmation('');
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              Delete Firm
+              Delete Firm and All Users
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete this firm? This action cannot be undone.
+              This is a destructive action that cannot be undone.
             </DialogDescription>
           </DialogHeader>
           
           {firmToDelete && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Destructive warning */}
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>WARNING:</strong> This will permanently delete the firm <strong>"{firmToDelete.name}"</strong> and <strong>ALL {firmToDelete.user_count || 0} user(s)</strong>. 
+                  User accounts will be completely removed and cannot be recovered.
+                </span>
+              </div>
+
               <div className="rounded-lg border bg-muted/50 p-3">
                 <p className="font-medium">{firmToDelete.name}</p>
-                {firmToDelete.user_count && firmToDelete.user_count > 0 && (
-                  <p className="text-sm text-muted-foreground">{firmToDelete.user_count} user(s) assigned</p>
-                )}
+                <p className="text-sm text-muted-foreground">{firmToDelete.user_count || 0} user(s) will be deleted</p>
               </div>
               
-              {firmToDelete.user_count && firmToDelete.user_count > 0 && (
-                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>This firm has {firmToDelete.user_count} user(s). They will be unassigned from the firm but their accounts will remain.</span>
-                </div>
-              )}
+              {/* Type to confirm */}
+              <div className="space-y-2">
+                <Label htmlFor="confirm-firm-name">
+                  Type <span className="font-mono font-semibold bg-muted px-1 rounded">{firmToDelete.name}</span> to confirm:
+                </Label>
+                <Input
+                  id="confirm-firm-name"
+                  value={firmDeleteConfirmation}
+                  onChange={(e) => setFirmDeleteConfirmation(e.target.value)}
+                  placeholder="Enter firm name exactly"
+                  className={firmDeleteConfirmation === firmToDelete.name ? 'border-destructive' : ''}
+                />
+              </div>
             </div>
           )}
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFirmToDelete(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => {
+              setFirmToDelete(null);
+              setFirmDeleteConfirmation('');
+            }}>Cancel</Button>
             <Button 
               variant="destructive" 
               onClick={handleDeleteFirm}
-              disabled={deletingFirmId === firmToDelete?.id}
+              disabled={deletingFirmId === firmToDelete?.id || firmDeleteConfirmation !== firmToDelete?.name}
             >
               {deletingFirmId === firmToDelete?.id ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
-              Delete Firm
+              Delete Firm and Users
             </Button>
           </DialogFooter>
         </DialogContent>
