@@ -46,6 +46,22 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
+          <CardTitle>License Scope</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, revocable license to access and use the Service solely for your organization's internal purposes.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>You may not sublicense, assign, or transfer your access rights to any third party</li>
+            <li>Access is granted only to authorized personnel within your organization</li>
+            <li>This license may be revoked at any time for violation of these Terms</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>No Legal or Professional Advice</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
@@ -79,6 +95,22 @@ export default function Terms() {
             <li>Use the Service lawfully</li>
             <li>Not misrepresent outputs as factual findings</li>
             <li>Not use the Service to harass, defame, or target individuals or entities</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Confidentiality</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            All outputs, analyses, and information provided through the Service are confidential to your organization.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>You may not share outputs with third parties without prior written consent from the Company</li>
+            <li>Internal distribution within your organization must preserve all applicable disclaimers</li>
+            <li>Outputs may not be used in public filings, press releases, or external communications without authorization</li>
           </ul>
         </CardContent>
       </Card>
@@ -121,6 +153,22 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Export Restrictions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            All exports from the Service, including but not limited to screenshots, PDFs, downloaded reports, and copied data, are subject to the same restrictions as on-platform usage.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>All exports must retain the platform's disclaimers and context</li>
+            <li>Removal, alteration, or obscuring of disclaimers constitutes a material breach of these Terms</li>
+            <li>Exports may not be modified to misrepresent the nature of the underlying data</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Intellectual Property</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
@@ -143,12 +191,60 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Audit and Logging Notice</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            All access to and use of the Service is logged for security, compliance, and audit purposes.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Logs include authentication events, data access patterns, and export activities</li>
+            <li>Logs may be reviewed in response to suspected misuse or security incidents</li>
+            <li>Audit logs are retained for a minimum of two (2) years</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Immediate Remedies</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            The Company reserves the right to take immediate action in response to violations of these Terms, including but not limited to:
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Immediate suspension of access without prior notice for suspected misuse</li>
+            <li>Pursuit of legal remedies for unauthorized redistribution, defamation, or misrepresentation</li>
+            <li>Termination of accounts with no refund for any prepaid services</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Disclaimer of Warranties</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
             The Service is provided "as is" and "as available." We make no warranties regarding accuracy, completeness, or fitness for a particular purpose.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data Source Disclaimer</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            The Service analyzes publicly available datasets released by government agencies and other public sources. These datasets may contain errors, omissions, or outdated information.
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>We do not guarantee the accuracy, completeness, or timeliness of source data</li>
+            <li>Provider information reflects source data as published and may not reflect current status</li>
+            <li>Data processing may introduce additional limitations not present in source datasets</li>
+          </ul>
         </CardContent>
       </Card>
 
@@ -189,10 +285,15 @@ export default function Terms() {
         <CardHeader>
           <CardTitle>Governing Law</CardTitle>
         </CardHeader>
-        <CardContent className="text-muted-foreground">
+        <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            These Terms are governed by the laws of the applicable jurisdiction.
+            These Terms are governed by and construed in accordance with the laws of the State of Arizona, without regard to its conflict of law principles.
           </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Any disputes arising from these Terms shall be resolved exclusively in the state or federal courts located in Arizona</li>
+            <li>You consent to the personal jurisdiction of such courts</li>
+            <li>The prevailing party in any legal action shall be entitled to recover reasonable attorneys' fees and costs</li>
+          </ul>
         </CardContent>
       </Card>
 
