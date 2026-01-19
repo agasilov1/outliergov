@@ -327,14 +327,27 @@ export default function Admin() {
         }
       });
       
-      if (error) throw new Error(error.message || 'Failed to delete firm');
+      // Extract error message from either error object or data response
+      if (error) {
+        // Try to parse the error context for the actual message
+        const errorMsg = error.message || 'Failed to delete firm';
+        console.error('Function error:', error);
+        throw new Error(errorMsg);
+      }
       
       if (!data?.success) {
-        // Handle partial failure
+        // Handle partial failure or full failure with detailed message
+        const detailedError = data?.error || 'Unknown error';
+        const failedEmail = data?.failedUserEmail;
+        const step = data?.step;
+        
         if (data?.deletedUserIds?.length > 0) {
-          toast.warning(`Partial deletion: ${data.deletedUserIds.length} user(s) deleted, but firm deletion failed. ${data.error}`);
+          toast.warning(`Partial deletion: ${data.deletedUserIds.length} user(s) deleted. Failed at: ${failedEmail || 'unknown'}. ${detailedError}`);
         } else {
-          throw new Error(data?.error || 'Failed to delete firm');
+          const errorParts = [detailedError];
+          if (failedEmail) errorParts.push(`User: ${failedEmail}`);
+          if (step) errorParts.push(`Step: ${step}`);
+          throw new Error(errorParts.join(' | '));
         }
       } else {
         toast.success(`Firm "${firmToDelete.name}" and ${data.deletedUserCount || 0} user(s) permanently deleted`);
