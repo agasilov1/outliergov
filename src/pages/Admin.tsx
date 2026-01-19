@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Plus, Eye, EyeOff, Trash2, Lock, Unlock } from 'lucide-react';
+import { Shield, Users, Building2, FileText, Copy, Check, Loader2, UserPlus, Database, CheckCircle2, XCircle, AlertTriangle, Plus, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -76,13 +76,6 @@ export default function Admin() {
   const [activeSection, setActiveSection] = useState<'users' | 'firms' | 'data' | 'audit'>('users');
   
   // Data management state
-  const [recomputeLoading, setRecomputeLoading] = useState(false);
-  const [lastComputeStats, setLastComputeStats] = useState<{
-    providers: number;
-    flagged: number;
-    peerGroups: number;
-    computeRunId: string | null;
-  } | null>(null);
   const [computeRuns, setComputeRuns] = useState<ComputeRun[]>([]);
   const [datasetReleases, setDatasetReleases] = useState<DatasetRelease[]>([]);
   
@@ -118,9 +111,6 @@ export default function Admin() {
   const [users, setUsers] = useState<User[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  
-  // Recompute safety lock
-  const [recomputeLocked, setRecomputeLocked] = useState(true);
   
   // Audit log state
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -355,29 +345,6 @@ export default function Admin() {
       toast.error('Failed to delete firm');
     } finally {
       setDeletingFirmId(null);
-    }
-  }
-
-  async function handleRecomputeAnomalies() {
-    setRecomputeLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('recompute-anomalies');
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setLastComputeStats({
-        providers: data.results?.providers_analyzed || 0,
-        flagged: data.results?.providers_flagged || 0,
-        peerGroups: data.results?.peer_groups_analyzed || 0,
-        computeRunId: data.compute_run_id
-      });
-      toast.success(`Flagged ${data.results?.providers_flagged || 0} providers`);
-      loadData();
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Failed to recompute');
-    } finally {
-      setRecomputeLoading(false);
-      setRecomputeLocked(true); // Re-lock after completion
     }
   }
 
@@ -862,51 +829,6 @@ export default function Admin() {
               </CardContent>
             </Card>
           )}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recompute Anomalies</CardTitle>
-              <CardDescription>Run anomaly detection on current data using the Top 0.5% threshold</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2">
-                  <Switch
-                    checked={!recomputeLocked}
-                    onCheckedChange={(checked) => setRecomputeLocked(!checked)}
-                  />
-                  {recomputeLocked ? (
-                    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Lock className="h-4 w-4" /> Safety Lock
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-sm text-amber-600 font-medium">
-                      <Unlock className="h-4 w-4" /> Unlocked
-                    </span>
-                  )}
-                </div>
-                <Button 
-                  onClick={handleRecomputeAnomalies} 
-                  disabled={recomputeLoading || recomputeLocked}
-                  className={recomputeLocked ? 'opacity-50' : ''}
-                >
-                  {recomputeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Recompute Anomalies
-                </Button>
-              </div>
-              {recomputeLocked && (
-                <p className="text-xs text-muted-foreground">Toggle the safety lock to enable the recompute button</p>
-              )}
-              {lastComputeStats && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                  <p><strong>Last Run:</strong></p>
-                  <p>Providers analyzed: {lastComputeStats.providers.toLocaleString()}</p>
-                  <p>Peer groups: {lastComputeStats.peerGroups}</p>
-                  <p>Providers flagged: {lastComputeStats.flagged}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
           <Card><CardHeader><CardTitle>Dataset Releases</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Label</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Ingested</TableHead></TableRow></TableHeader><TableBody>{datasetReleases.map(r => <TableRow key={r.id} className={r.status === 'active' ? 'bg-muted/30' : ''}><TableCell className="font-medium">{r.release_label}</TableCell><TableCell>{isSyntheticDataset(r) ? <Badge variant="outline" className="text-amber-600 border-amber-600">Demo</Badge> : <Badge variant="outline" className="text-green-600 border-green-600">CMS</Badge>}</TableCell><TableCell><Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge></TableCell><TableCell className="text-sm text-muted-foreground">{r.ingested_at ? formatDate(r.ingested_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
           <Card><CardHeader><CardTitle>Compute History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Version</TableHead><TableHead>Started</TableHead></TableRow></TableHeader><TableBody>{computeRuns.map(r => <TableRow key={r.id}><TableCell>{r.run_type}</TableCell><TableCell>{r.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : r.status === 'failed' ? <XCircle className="h-4 w-4 text-destructive" /> : <Loader2 className="h-4 w-4 animate-spin" />}</TableCell><TableCell className="font-mono text-xs">{r.rule_set_version}</TableCell><TableCell className="text-sm text-muted-foreground">{r.started_at ? formatDate(r.started_at) : '—'}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         </div>
