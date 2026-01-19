@@ -39,7 +39,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         open={mustChangePassword} 
         onPasswordChanged={clearMustChangePassword} 
       />
-      <DisclaimerBanner />
+      <DisclaimerBanner variant="detailed" />
       
       <div className="flex flex-1">
         {/* Sidebar */}
