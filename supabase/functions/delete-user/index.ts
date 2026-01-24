@@ -8,6 +8,14 @@ Deno.serve(async (req) => {
 
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
+  // Reject non-POST requests
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');
@@ -83,6 +91,31 @@ Deno.serve(async (req) => {
 
     // Create admin client
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Prevent deleting admin users
+    const { data: targetRoles } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user_id);
+
+    const targetIsAdmin = targetRoles?.some(r => r.role === 'admin');
+    if (targetIsAdmin) {
+      return new Response(
+        JSON.stringify({ error: 'Cannot delete admin users' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Protect specific email (server-side enforcement)
+    const { data: targetUser } = await adminClient.auth.admin.getUserById(user_id);
+    const protectedEmails = ['arifgasilov123@gmail.com'];
+    if (targetUser?.user?.email && 
+        protectedEmails.includes(targetUser.user.email.toLowerCase())) {
+      return new Response(
+        JSON.stringify({ error: 'This account is protected' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Delete the profile first (cascade should handle related records)
     const { error: profileError } = await adminClient
