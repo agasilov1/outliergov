@@ -14,6 +14,14 @@ Deno.serve(async (req) => {
 
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
+  // Reject non-POST requests
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
