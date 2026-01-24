@@ -1,101 +1,62 @@
 
 
-## Security Hardening: Safe Code Changes Only
+# Firm Isolation: Restrict Firms Table Access
 
-### Scope: Only Low-Risk, Concrete Fixes
+## Summary
+Apply the RLS policy change to restrict firm visibility. Your friend's review was accurate and their improvements are valid.
 
-Based on expert review, this plan includes ONLY:
-- HTTP method enforcement on admin edge functions
-- Server-side protection for admin/protected user deletion
+## Database Migration
 
-**Explicitly NOT included** (require manual work or dashboard config):
-- Rate limiting (no Redis/KV infrastructure exists)
-- RLS policy changes (risk of breaking user flows)
-- Database constraint changes (could break system actions)
-- Dashboard settings (leaked password protection, auth rate limits)
+```sql
+-- Idempotent drop (handles any policy name mismatch)
+DROP POLICY IF EXISTS "Authenticated users can view firms" ON public.firms;
 
----
-
-### Change 1: HTTP Method Enforcement on Admin Functions
-
-**Why it's safe:** The Admin UI already uses POST for all function calls. This only rejects unexpected GET/PUT/DELETE requests that shouldn't happen anyway.
-
-**Files to modify:**
-
-| File | Change |
-|------|--------|
-| `supabase/functions/list-users/index.ts` | Add POST-only check |
-| `supabase/functions/create-user/index.ts` | Add POST-only check |
-| `supabase/functions/delete-user/index.ts` | Add POST-only check |
-| `supabase/functions/generate-invite/index.ts` | Add POST-only check |
-| `supabase/functions/delete-firm-with-users/index.ts` | Add POST-only check |
-
-**Code pattern** (add after CORS preflight handling):
-```typescript
-// Reject non-POST requests
-if (req.method !== 'POST') {
-  return new Response(
-    JSON.stringify({ error: 'Method not allowed' }),
-    { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
+-- Restrictive policy: users see only their own firm, admins see all
+CREATE POLICY "Users can view their own firm"
+ON public.firms
+FOR SELECT
+TO authenticated
+USING (
+  public.has_role(auth.uid(), 'admin'::app_role)
+  OR EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.firm_id = public.firms.id
+  )
+);
 ```
 
----
+## Why This is Safe
 
-### Change 2: Server-Side Admin Deletion Protection
+| Check | Status | Details |
+|-------|--------|---------|
+| Policy name exists | Verified | `"Authenticated users can view firms"` matches exactly |
+| has_role signature | Verified | Expects `app_role` enum - cast is correct |
+| profiles RLS allows subquery | Verified | Users can SELECT their own profile row |
+| Admin bypass works | Verified | `has_role()` is SECURITY DEFINER, bypasses RLS |
+| Edge functions unaffected | Verified | Service role key bypasses all RLS |
 
-**Why it's safe:** Only affects the delete-user endpoint. Normal user deletions continue working. Prevents accidental deletion of the sole admin account.
+## What This Changes
 
-**File:** `supabase/functions/delete-user/index.ts`
+| User Type | Before | After |
+|-----------|--------|-------|
+| Firm A user | Sees all firms | Sees only Firm A |
+| Firm B user | Sees all firms | Sees only Firm B |
+| Admin | Sees all firms | Sees all firms (unchanged) |
+| User with no firm | Sees all firms | Sees no firms |
 
-**Add after the self-deletion check (around line 80):**
-```typescript
-// Prevent deleting admin users
-const { data: targetRoles } = await adminClient
-  .from('user_roles')
-  .select('role')
-  .eq('user_id', user_id);
+## Post-Migration Verification
 
-const targetIsAdmin = targetRoles?.some(r => r.role === 'admin');
-if (targetIsAdmin) {
-  return new Response(
-    JSON.stringify({ error: 'Cannot delete admin users' }),
-    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
+After applying, test these scenarios:
 
-// Protect specific email (server-side enforcement)
-const { data: targetUser } = await adminClient.auth.admin.getUserById(user_id);
-const protectedEmails = ['arifgasilov123@gmail.com'];
-if (targetUser?.user?.email && 
-    protectedEmails.includes(targetUser.user.email.toLowerCase())) {
-  return new Response(
-    JSON.stringify({ error: 'This account is protected' }),
-    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-```
+1. **Normal user login** - Dashboard loads, firm name displays correctly
+2. **Admin login** - Can see all firms in Admin panel
+3. **ProtectedRoute check** - Firm expiration check still works (queries by `id = profile.firm_id`)
 
----
+## Technical Notes
 
-### What You Should Do Manually (Not in This Plan)
-
-| Item | Where | Notes |
-|------|-------|-------|
-| Enable Leaked Password Protection | Supabase Dashboard → Auth → Policies | Safe, may reject weak passwords |
-| Enable Auth Rate Limits | Supabase Dashboard → Auth → Rate Limits | Start with generous limits (100/hour) |
-| Review RLS on `firms` table | SQL Editor / Migration | Test in dev environment first |
-| Centralize password validation | Future refactor | Low priority, cosmetic consistency |
-
----
-
-### Summary
-
-This plan makes **2 surgical changes** that:
-- Cannot break existing user flows (Admin UI already uses POST)
-- Protect the sole admin account from accidental deletion
-- Add zero new dependencies or infrastructure
-
-Total files modified: 6 edge functions
+- Uses `EXISTS` instead of `IN` for cleaner correlation and slight performance benefit
+- Explicit table reference `public.firms.id` prevents ambiguity
+- `IF EXISTS` makes the migration safe to re-run
 
