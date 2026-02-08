@@ -49,14 +49,6 @@ const Index = () => {
         <ArrowRight className="h-4 w-4" />
       </Button>
 
-      {/* Contact */}
-      <a 
-        href="mailto:info@gasilov.com" 
-        className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
-      >
-        Contact: info@gasilov.com
-      </a>
-
       {/* Legal links */}
       <div className="mt-4 flex justify-center gap-4 text-sm text-muted-foreground">
         <Link to="/privacy" className="underline hover:text-foreground">
