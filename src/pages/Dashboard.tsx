@@ -8,9 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { BarChart3, TrendingUp, Loader2, Database, Info, Save, X } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { BarChart3, TrendingUp, Loader2, Database, Info, Save, X, Star, GitCompareArrows } from 'lucide-react';
 
 import { ProviderFilters } from '@/components/ProviderFilters';
+import { OutlierConcentrationCharts } from '@/components/OutlierConcentrationCharts';
+import { useWatchlist } from '@/hooks/useWatchlist';
 import { useToast } from '@/hooks/use-toast';
 import {
   Pagination,
@@ -48,6 +53,8 @@ interface QueryParams {
   states: string[];
   specialties: string[];
   excludeInstitutional: boolean;
+  watchlistOnly: boolean;
+  watchlistNpis: string[];
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -59,7 +66,11 @@ export default function Dashboard() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const { watchlistSet, toggleWatchlist, isToggling } = useWatchlist();
   
+  // Compare selection state
+  const [selectedForCompare, setSelectedForCompare] = useState<Set<string>>(new Set());
+
   // State for saved filter defaults (avoids localStorage in render)
   const [hasSavedDefault, setHasSavedDefault] = useState(false);
 
@@ -91,18 +102,21 @@ export default function Dashboard() {
   const stateFilter = searchParams.get('states')?.split(',').filter(Boolean) || [];
   const specialtyFilter = searchParams.get('specs')?.split(',').filter(Boolean) || [];
   const excludeInstitutional = searchParams.get('exInst') !== 'false'; // default true
+  const watchlistOnly = searchParams.get('watchlist') === 'true';
 
   // Build query parameters for server-side filtering
+  const watchlistNpisArray = useMemo(() => [...watchlistSet], [watchlistSet]);
   const queryParams = useMemo((): QueryParams => ({
     search: searchQuery.trim(),
     states: stateFilter,
     specialties: specialtyFilter,
-    excludeInstitutional
-  }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional]);
+    excludeInstitutional,
+    watchlistOnly,
+    watchlistNpis: watchlistNpisArray,
+  }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional, watchlistOnly, watchlistNpisArray]);
 
   // Shared filter builder - ensures count and data queries use identical filters
   const applyFilters = useCallback((query: any, params: QueryParams) => {
-    // ONLY apply institutional filter when toggle is ON
     if (params.excludeInstitutional) {
       query = query.eq('is_institutional', false);
     }
@@ -113,11 +127,16 @@ export default function Dashboard() {
       query = query.in('specialty', params.specialties);
     }
     if (params.search) {
-      // Sanitize: commas and parentheses break PostgREST .or() syntax
       const safeSearch = params.search.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
       if (safeSearch) {
         query = query.or(`provider_name.ilike.%${safeSearch}%,npi.ilike.%${safeSearch}%`);
       }
+    }
+    if (params.watchlistOnly && params.watchlistNpis.length > 0) {
+      query = query.in('npi', params.watchlistNpis);
+    } else if (params.watchlistOnly) {
+      // Watchlist is on but empty — show nothing
+      query = query.eq('npi', '__no_match__');
     }
     return query;
   }, []);
@@ -158,7 +177,7 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch dynamic year range (must be before totalStats which depends on it)
+  // Fetch dynamic year range
   const { data: yearRange } = useQuery({
     queryKey: ['year-range'],
     queryFn: async () => {
@@ -178,13 +197,11 @@ export default function Dashboard() {
       const applyStatsFilter = (query: any) =>
         excludeInstitutional ? query.eq('is_institutional', false) : query;
 
-      // Total count (select 'npi' for lean query)
       const { count: totalCount, error: e1 } = await applyStatsFilter(
         supabase.from('outlier_registry').select('npi', { count: 'exact', head: true })
       );
       if (e1) throw e1;
 
-      // Full-period outliers (outliers in ALL years)
       const { count: fullPeriodCount, error: e2 } = await applyStatsFilter(
         supabase.from('outlier_registry').select('npi', { count: 'exact', head: true })
           .gte('years_as_outlier', totalYears)
@@ -203,13 +220,11 @@ export default function Dashboard() {
   const { data: filterOptions } = useQuery({
     queryKey: ['outlier-registry-filter-options'],
     queryFn: async () => {
-      // Get distinct states
       const { data: statesData } = await supabase
         .from('outlier_registry')
         .select('state')
         .not('state', 'is', null);
       
-      // Get distinct specialties
       const { data: specialtiesData } = await supabase
         .from('outlier_registry')
         .select('specialty')
@@ -237,7 +252,6 @@ export default function Dashboard() {
       yearsAsOutlier: row.years_as_outlier || 0,
       maxPeerRatio: row.max_x_vs_peer_median,
       maxTotalAllowed: row.max_total_allowed || 0,
-      // Rank accounts for pagination offset
       rank: (currentPage - 1) * ITEMS_PER_PAGE + index + 1
     }));
   }, [registryData, currentPage]);
@@ -252,7 +266,6 @@ export default function Dashboard() {
         newParams.set(key, value);
       }
     });
-    // Reset to page 1 on filter change (unless updating page itself)
     if (!('page' in updates)) {
       newParams.set('page', '1');
     }
@@ -273,7 +286,6 @@ export default function Dashboard() {
   };
 
   const handleRowClick = (npi: string, rank: number, totalCount: number) => {
-    // Preserve current query string for return navigation
     navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}&returnTo=${encodeURIComponent(location.search)}`);
   };
 
@@ -286,35 +298,42 @@ export default function Dashboard() {
 
   const handleClearAllFilters = () => {
     setSearchParams(new URLSearchParams());
+    setSelectedForCompare(new Set());
   };
 
-  // Generate page numbers for pagination - show up to 5 pages around current
+  // Compare selection handlers
+  const handleToggleCompare = (npi: string) => {
+    setSelectedForCompare(prev => {
+      const next = new Set(prev);
+      if (next.has(npi)) {
+        next.delete(npi);
+      } else if (next.size < 3) {
+        next.add(npi);
+      }
+      return next;
+    });
+  };
+
+  const handleCompare = () => {
+    const npis = [...selectedForCompare].join(',');
+    navigate(`/compare?npis=${npis}`);
+  };
+
+  // Generate page numbers for pagination
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
     
     if (totalPages <= 7) {
-      // Show all pages if 7 or fewer
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
-      // Always show first page
       pages.push(1);
-      
-      // Calculate window of 5 pages around current
       const windowStart = Math.max(2, currentPage - 2);
       const windowEnd = Math.min(totalPages - 1, currentPage + 2);
-      
-      // Add left ellipsis if needed
       if (windowStart > 2) pages.push('ellipsis');
-      
-      // Add pages in window (up to 5 pages)
       for (let i = windowStart; i <= windowEnd; i++) {
         pages.push(i);
       }
-      
-      // Add right ellipsis if needed
       if (windowEnd < totalPages - 1) pages.push('ellipsis');
-      
-      // Always show last page
       pages.push(totalPages);
     }
     
@@ -433,6 +452,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Outlier Concentration Charts */}
+      <OutlierConcentrationCharts excludeInstitutional={excludeInstitutional} />
+
       {/* Ranked Providers Table */}
       <Card>
         <CardHeader>
@@ -468,18 +490,35 @@ export default function Dashboard() {
             onSearchChange={(q) => updateFilters({ q: q || null })}
           />
 
-          {/* Filter persistence buttons */}
-          <div className="flex gap-2 mt-2">
-            <Button variant="ghost" size="sm" onClick={handleSaveAsDefault}>
-              <Save className="mr-1 h-3 w-3" />
-              Save as default
-            </Button>
-            {hasSavedDefault && (
-              <Button variant="ghost" size="sm" onClick={handleClearSavedDefault}>
-                <X className="mr-1 h-3 w-3" />
-                Clear default
+          {/* Watchlist toggle + filter persistence */}
+          <div className="flex flex-wrap items-center gap-4 mt-2">
+            <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+              <Switch
+                id="watchlist-only"
+                checked={watchlistOnly}
+                onCheckedChange={(val) => updateFilters({ watchlist: val ? 'true' : null })}
+              />
+              <Label htmlFor="watchlist-only" className="text-sm cursor-pointer flex items-center gap-1">
+                <Star className="h-3.5 w-3.5" />
+                My Watchlist
+              </Label>
+              {watchlistSet.size > 0 && (
+                <Badge variant="secondary" className="text-xs">{watchlistSet.size}</Badge>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={handleSaveAsDefault}>
+                <Save className="mr-1 h-3 w-3" />
+                Save as default
               </Button>
-            )}
+              {hasSavedDefault && (
+                <Button variant="ghost" size="sm" onClick={handleClearSavedDefault}>
+                  <X className="mr-1 h-3 w-3" />
+                  Clear default
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Table */}
@@ -489,9 +528,11 @@ export default function Dashboard() {
             </div>
           ) : (filteredCount || 0) === 0 ? (
             <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
-              {(totalStats?.totalCount || 0) === 0 
-                ? 'No data found in outlier_registry table.'
-                : 'No providers match the current filters.'}
+              {watchlistOnly && watchlistSet.size === 0
+                ? 'Your watchlist is empty. Star providers to add them.'
+                : (totalStats?.totalCount || 0) === 0 
+                  ? 'No data found in outlier_registry table.'
+                  : 'No providers match the current filters.'}
             </div>
           ) : (
             <>
@@ -507,6 +548,8 @@ export default function Dashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead className="w-10"></TableHead>
                       <TableHead className="w-16">Rank</TableHead>
                       <TableHead>Provider Name</TableHead>
                       <TableHead>NPI</TableHead>
@@ -547,12 +590,34 @@ export default function Dashboard() {
                   </TableHeader>
                   <TableBody>
                     {rankedProviders.map((provider) => {
+                      const isStarred = watchlistSet.has(provider.npi);
+                      const isSelected = selectedForCompare.has(provider.npi);
                       return (
                         <TableRow
                           key={provider.npi}
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => handleRowClick(provider.npi, provider.rank, filteredCount || 0)}
                         >
+                          {/* Star / Watchlist */}
+                          <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => toggleWatchlist(provider.npi)}
+                              disabled={isToggling}
+                              className="p-1 rounded hover:bg-muted"
+                              aria-label={isStarred ? 'Remove from watchlist' : 'Add to watchlist'}
+                            >
+                              <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                            </button>
+                          </TableCell>
+                          {/* Compare checkbox */}
+                          <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={!isSelected && selectedForCompare.size >= 3}
+                              onCheckedChange={() => handleToggleCompare(provider.npi)}
+                              aria-label="Select for comparison"
+                            />
+                          </TableCell>
                           <TableCell className="font-mono font-semibold text-muted-foreground">
                             #{provider.rank}
                           </TableCell>
@@ -629,6 +694,15 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Floating Compare button */}
+      {selectedForCompare.size >= 2 && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button onClick={handleCompare} size="lg" className="shadow-lg gap-2">
+            <GitCompareArrows className="h-5 w-5" />
+            Compare ({selectedForCompare.size})
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

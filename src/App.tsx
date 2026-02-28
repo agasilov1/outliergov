@@ -19,6 +19,7 @@ import Admin from "./pages/Admin";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
+import ProviderCompare from "./pages/ProviderCompare";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,16 @@ const App = () => (
                   <AppLayout>
                     <Admin />
                   </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compare"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ProviderCompare />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
