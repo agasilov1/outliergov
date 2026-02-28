@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown, Star } from 'lucide-react';
 import { PossibleExplanations } from '@/components/PossibleExplanations';
 import { ProviderCharts } from '@/components/ProviderCharts';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useMemo, useState } from 'react';
+import { useWatchlist } from '@/hooks/useWatchlist';
 
 interface ProviderYearMetric {
   npi: string;
@@ -56,6 +57,7 @@ export default function ProviderDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { watchlistSet, toggleWatchlist, isToggling } = useWatchlist();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -432,6 +434,17 @@ export default function ProviderDetail() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {/* Watchlist button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => npi && toggleWatchlist(npi)}
+                disabled={isToggling}
+                className="no-print"
+              >
+                <Star className={`mr-2 h-4 w-4 ${npi && watchlistSet.has(npi) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                {npi && watchlistSet.has(npi) ? 'Watching' : 'Watch'}
+              </Button>
               {/* Export buttons */}
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="no-print">
                 <Download className="mr-2 h-4 w-4" />
