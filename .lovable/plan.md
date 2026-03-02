@@ -1,70 +1,51 @@
-## Plan: Dashboard Drug % Column/Filter + Provider Data Context Card
-
-### Overview
-
-Two changes: (1) Add a "Drug %" column and drug-dominant filter toggle to the dashboard rankings table, and (2) replace the static "Possible Explanations" component on the provider detail page with a data-driven context card showing only applicable insights.
-
----
-
-### Technical Details
-
-#### 1.. Dashboard changes (`Dashboard.tsx` + `ProviderFilters.tsx`)
-
-**New state/filter:**
-
-- Add `excludeDrugDominant` boolean filter (URL param `exDrug`), default `true`
-- Add to `QueryParams` interface and `applyFilters` function: `WHERE drug_pct < 0.8 OR drug_pct IS NULL`
-
-**Institutional filter default:**
-
-- Already defaults to ON (`searchParams.get('exInst') !== 'false'` on line 104). No change needed.
-
-**Table column:**
-
-- Add "Drug %" column header (sortable) after "Max Allowed" column
-- Display `drug_pct` formatted as percentage (e.g. "82.3%") or "—" if null
-- Add sorting: new URL param `sort` to allow toggling sort by `drug_pct`
-
-**Data fetching:**
-
-- Add `drug_pct` to the `outlier_registry` select query (line 167)
-- Add filter logic in `applyFilters`: if `excludeDrugDominant`, add `.or('drug_pct.lt.0.8,drug_pct.is.null')`
-
-**Filter UI (`ProviderFilters.tsx`):**
-
-- Add new prop `excludeDrugDominant` + `onExcludeDrugDominantChange`
-- Render a toggle similar to the institutional one: "Exclude drug-dominant (>80%)"
-
-#### 3. Provider Detail: Data Context Card (`ProviderDetail.tsx`)
-
-**Fetch new fields:**
-
-- Add `drug_pct`, `tot_hcpcs_cds`, `bene_avg_risk_score`, `entity_type` to the `provider_year_metrics` select query (line 166)
-- Already fetches `entity_type`, `tot_benes`
-
-**Replace `<PossibleExplanations />**` with a new `<DataContextCard />` component that receives the latest year's metrics and conditionally renders applicable bullets:
 
 
-| Condition                   | Bullet text                                             |
-| --------------------------- | ------------------------------------------------------- |
-| `drug_pct > 0.8`            | Drug-related billing explanation with actual percentage |
-| `tot_benes < 50`            | Small patient panel with actual count                   |
-| `bene_avg_risk_score > 2.0` | High-acuity population with actual score                |
-| `tot_hcpcs_cds < 15`        | Narrow procedure set with actual count                  |
-| `entity_type === 'O'`       | Organizational provider aggregation note                |
+## Plan: Fix Provider Ranking + Drug % Rounding
 
+### Issue 1: Profile page ranking shows filtered count
 
-If no conditions apply, fall back to the existing generic `PossibleExplanations` component.
+**Problem:** The dashboard passes its filtered `rank` and `total` via URL params when navigating to the provider page. When filters (drug-dominant, institutional) are active, the total reflects the filtered subset, not the full registry.
 
-#### 4. New component: `src/components/DataContextCard.tsx`
+**Fix in `src/pages/ProviderDetail.tsx`:**
+- Instead of relying on `total` from URL params, fetch the actual full registry count directly:
+  ```
+  const { count } = await supabase
+    .from('outlier_registry')
+    .select('npi', { count: 'exact', head: true })
+  ```
+- Similarly, compute the provider's true rank by counting how many providers have a higher `max_x_vs_peer_median` (the current sort):
+  ```
+  const { count: higherCount } = await supabase
+    .from('outlier_registry')
+    .select('npi', { count: 'exact', head: true })
+    .gt('max_x_vs_peer_median', providerRow.max_x_vs_peer_median)
+  // rank = higherCount + 1
+  ```
+- This makes the rank always reflect the full unfiltered registry, independent of dashboard filters.
+- Remove reliance on `rank` and `total` URL params for the display (keep `returnTo` for back navigation).
 
-Props: `drugPct`, `totBenes`, `beneAvgRiskScore`, `totHcpcsCds`, `entityType` (all nullable). Renders a Card with only the matching insights as styled bullet items.
+**Fix in `src/pages/Dashboard.tsx`:**
+- Remove `rank` and `total` from the navigation URL since the profile page will compute its own rank.
 
----
+**Fix in `src/components/ProviderBrief.tsx`:**
+- The brief also receives `rank` and `totalProviders` as props — update to use the same self-computed values.
+
+### Issue 2: Drug % rounds 99.97% up to 100.0%
+
+**Problem:** `(0.999651 * 100).toFixed(1)` produces `"100.0"` due to rounding. The user wants truncation to 1 decimal place so it shows `"99.9%"`.
+
+**Fix:** Create a `truncateToOneDecimal` helper that floors to 1 decimal place instead of rounding:
+```ts
+const pct = Math.floor(value * 1000) / 10; // 0.999651 → 99.9
+```
+
+Apply this in:
+- `src/components/DataContextCard.tsx` (line 24)
+- `src/pages/Dashboard.tsx` (line 657)
 
 ### Files to modify
+- **`src/pages/ProviderDetail.tsx`**: Add query to fetch unfiltered rank + total from `outlier_registry`
+- **`src/pages/Dashboard.tsx`**: Remove rank/total from nav URL; fix drug % truncation
+- **`src/components/DataContextCard.tsx`**: Fix drug % truncation
+- **`src/components/ProviderBrief.tsx`**: Use self-computed rank if applicable
 
-- `**src/pages/Dashboard.tsx**`: Add drug_pct to query, filter logic, table column, sort support
-- `**src/components/ProviderFilters.tsx**`: Add drug-dominant toggle
-- `**src/components/DataContextCard.tsx**`: New component (data-driven context bullets)
-- `**src/pages/ProviderDetail.tsx**`: Fetch new fields, replace `<PossibleExplanations />` with `<DataContextCard />`
