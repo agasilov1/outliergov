@@ -13,8 +13,9 @@ import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown, St
 import { DataContextCard } from '@/components/DataContextCard';
 import { ProviderCharts } from '@/components/ProviderCharts';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { generateProviderPDF, type PDFProviderData } from '@/lib/generateProviderPDF';
 
 interface ProviderYearMetric {
   npi: string;
@@ -66,6 +67,11 @@ export default function ProviderDetail() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{npi: string, provider_name: string | null, specialty: string | null}[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Chart refs for PDF capture
+  const barChartRef = useRef<HTMLDivElement>(null);
+  const lineChartRef = useRef<HTMLDivElement>(null);
 
   // Get returnTo from URL params (rank/total now self-computed)
   const returnTo = searchParams.get('returnTo');
@@ -118,32 +124,37 @@ export default function ProviderDetail() {
       .trim()
       .slice(0, 120);
 
-  // Export PDF handler - dynamic filename based on provider
-  const handleExportPDF = () => {
-    const originalTitle = document.title;
-
+  const handleExportPDF = async () => {
+    if (!provider || flagYears.length === 0) return;
+    setIsGeneratingPDF(true);
     try {
-      const npiStr = provider?.npi || "provider";
-      const name = provider ? getProviderDisplayName() : "";
-      const base = name ? `${npiStr}_${name}` : npiStr;
-      const filename = slugifyFilename(base);
-
-      const restore = () => {
-        document.title = originalTitle;
-        window.removeEventListener("afterprint", restore);
+      const latest = metricsData?.[metricsData.length - 1];
+      const pdfData: PDFProviderData = {
+        npi: provider.npi,
+        providerName: getProviderDisplayName(),
+        specialty: provider.specialty,
+        state: provider.state,
+        entityType: provider.entity_type,
+        rank: rank,
+        totalProviders: totalProviders,
+        topPercentage: topPercentage,
+        bestPeerRatio: bestPeerRatio,
+        yearsVerified,
+        flagYears,
+        dataContext: {
+          drugPct: latest?.drug_pct ?? null,
+          totBenes: latest?.tot_benes ?? null,
+          beneAvgRiskScore: latest?.bene_avg_risk_score ?? null,
+          totHcpcsCds: latest?.tot_hcpcs_cds ?? null,
+          entityType: latest?.entity_type ?? null,
+        },
       };
-
-      window.addEventListener("afterprint", restore);
-
-      document.title = filename;
-
-      window.print();
-
-      // Fallback: some browsers do not fire afterprint reliably
-      setTimeout(restore, 2000);
-    } catch {
-      document.title = originalTitle;
-      window.print();
+      await generateProviderPDF(pdfData, barChartRef.current, lineChartRef.current);
+    } catch (e) {
+      console.error('PDF generation failed:', e);
+      toast({ title: 'PDF export failed', description: 'Please try again.', variant: 'destructive' });
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -479,9 +490,9 @@ export default function ProviderDetail() {
                 <Download className="mr-2 h-4 w-4" />
                 CSV
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExportPDF} className="no-print">
+              <Button variant="outline" size="sm" onClick={handleExportPDF} className="no-print" disabled={isGeneratingPDF}>
                 <Download className="mr-2 h-4 w-4" />
-                PDF
+                {isGeneratingPDF ? 'Generating...' : 'PDF'}
               </Button>
               {/* PRIMARY BADGE: Peer ratio or fallback */}
               {bestPeerRatio ? (
@@ -628,7 +639,7 @@ export default function ProviderDetail() {
 
       {/* Visual Charts */}
       {flagYears.length > 0 && (
-        <ProviderCharts flagYears={flagYears} formatCurrency={formatCurrency} />
+        <ProviderCharts flagYears={flagYears} formatCurrency={formatCurrency} barChartRef={barChartRef} lineChartRef={lineChartRef} />
       )}
 
       {/* Per-Year Breakdown Table */}
