@@ -21,6 +21,8 @@ interface ProviderFiltersProps {
   filteredCount: number;
   excludeInstitutional: boolean;
   onExcludeInstitutionalChange: (value: boolean) => void;
+  excludeDrugDominant: boolean;
+  onExcludeDrugDominantChange: (value: boolean) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
 }
@@ -125,6 +127,8 @@ export function ProviderFilters({
   filteredCount,
   excludeInstitutional,
   onExcludeInstitutionalChange,
+  excludeDrugDominant,
+  onExcludeDrugDominantChange,
   searchQuery,
   onSearchChange,
 }: ProviderFiltersProps) {
@@ -132,7 +136,8 @@ export function ProviderFilters({
     (searchQuery ?? '').trim() !== '' ||
     selectedStates.length > 0 || 
     selectedSpecialties.length > 0 ||
-    !excludeInstitutional;
+    !excludeInstitutional ||
+    !excludeDrugDominant;
 
   return (
     <div className="space-y-3">
@@ -164,6 +169,19 @@ export function ProviderFilters({
             Exclude institutional
           </Label>
           <span className="text-xs text-muted-foreground">(labs, pharmacies, ambulance, etc.)</span>
+        </div>
+
+        {/* Drug-dominant toggle */}
+        <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+          <Switch
+            id="exclude-drug-dominant"
+            checked={excludeDrugDominant}
+            onCheckedChange={onExcludeDrugDominantChange}
+          />
+          <Label htmlFor="exclude-drug-dominant" className="text-sm cursor-pointer">
+            Exclude drug-dominant
+          </Label>
+          <span className="text-xs text-muted-foreground">(&gt;80%)</span>
         </div>
         
         <MultiSelectFilter
