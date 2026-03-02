@@ -1,14 +1,6 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { autoTable } from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
-
-// Extend jsPDF type for autotable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-    lastAutoTable: { finalY: number };
-  }
-}
 
 export interface PDFProviderData {
   npi: string;
@@ -342,7 +334,7 @@ export async function generateProviderPDF(
     ];
   });
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Year', 'Benes', 'Services', 'Total Allowed', 'Allowed/Bene', 'Peer Median', 'vs Median', 'Percentile']],
     body: tableBody,
@@ -371,7 +363,6 @@ export async function generateProviderPDF(
       7: { halign: 'center', fontStyle: 'bold' },
     },
     didParseCell: (hookData: any) => {
-      // Highlight percentile column
       if (hookData.section === 'body' && hookData.column.index === 7) {
         const text = hookData.cell.raw as string;
         if (text === 'Top 0.5%') {
