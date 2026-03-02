@@ -1,38 +1,41 @@
 
 
-## Plan: Fix PDF Export — 3 Issues
+## Plan: Fix PDF — Overlapping Elements, Fonts, and Stretched Charts
+
+### Issues identified
+
+1. **Overlapping elements on page 1**: Several spacing gaps are too tight (e.g., only 12pt after outlier box, 14pt between sections). The "Peer Group Snapshot" title/subtitle spacing is cramped.
+
+2. **Font issues**: jsPDF's built-in `helvetica` looks poor at PDF rendering. Will switch to using **Helvetica** but with better size/weight discipline. The real issue is inconsistent sizing — some labels are 8pt, some 10pt, the outlier title is 11pt instead of 13pt, etc.
+
+3. **Stretched charts**: The charts are captured at their DOM aspect ratio (roughly square cards in a 2-col grid) but rendered as `CONTENT_W × 200pt` (504×200), which stretches them horizontally. Fix: calculate the image height from the captured canvas's actual aspect ratio instead of hardcoding 200pt.
 
 ### Changes to `src/lib/generateProviderPDF.ts`
 
-**Issue 1: Move Data Context to page 1, eliminate page 3**
-- Move the Data Context section (lines 377–453) to after the Key Metrics row on page 1 (after line 274)
-- Remove `doc.addPage()` for page 3 entirely
-- Change `totalPages` from 3 to 2
-- Update footer calls: page 1 footer after Data Context, page 2 footer stays
+**Fix stretched charts (page 2):**
+- After capturing each chart image, calculate the actual aspect ratio from the canvas dimensions
+- Instead of `const imgH = 200`, compute: `const imgH = CONTENT_W * (canvas.height / canvas.width)`
+- Cap max height at ~250pt so it doesn't overflow the page
+- Change `captureChart` to return `{ dataUrl, width, height }` instead of just the data URL string, so aspect ratio info is available
 
-**Issue 2: Fix overlapping Y positions**
-- Use a running `y` variable consistently (already mostly done, but some gaps are too small)
-- After banner: `y = 75`
-- After provider name: `y += 20`
-- After NPI line: `y += 14`
-- After rank line: `y += 14`
-- After peer ratio badge: `y += 36`
-- After outlier box: dynamically calculate box height based on `splitTextToSize` result, then `y += boxHeight + 12`
-- After peer group snapshot grid: `y += 50`
-- After provider value line: `y += 16`
-- After key metrics row: `y += 30`
-- After data context title/subtitle: `y += 16`
-- Each data context insight box: calculate height from wrapped text, `y += height + 8`
+**Fix overlapping / spacing:**
+- Increase gap after outlier box: `y += boxHeight + 16` (was +12)
+- Increase gap after Peer Group Snapshot subtitle before grid: `y += 16` (was +14)
+- Increase gap after grid: `y += 54` (was +50)
+- Increase gap after provider value line: `y += 20` (was +16)
+- Increase gap after key metrics row: `y += 34` (was +30)
+- Increase gap after data context title: `y += 14` (was +12)
 
-**Issue 3: Fix fonts to spec**
-- Provider name: bold 20pt ✓ (already correct)
-- Section titles ("Peer Group Snapshot", "Data Context"): bold 13pt ✓ (already correct)
-- Body text/labels: 10pt (change from mixed 9/10)
-- Small/secondary text: 8pt (change disclaimer lines, subtitles)
-- Peer group snapshot numbers: bold 14pt (change from 12pt)
-- Peer median badge: bold 16pt (change from 14pt)
-- Footer: 7pt #6b7280 — update gray color to match `[107, 114, 128]`
+**Fix fonts to spec:**
+- Outlier box title: change from 11pt to 13pt bold
+- Outlier box description: keep 8pt
+- All section titles consistently 13pt bold
+- Body labels consistently 10pt
+- Secondary/small text consistently 8pt
+- Peer snapshot values: 14pt bold (already correct)
+- Peer median badge: 16pt bold (already correct)
+- Footer: 7pt (already correct)
 
 ### Files to modify
-- **`src/lib/generateProviderPDF.ts`** — All three fixes in one pass
+- **`src/lib/generateProviderPDF.ts`** — All fixes in one pass
 
