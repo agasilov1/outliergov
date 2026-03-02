@@ -531,6 +531,16 @@ export default function ProviderDetail() {
                 <span className="text-muted-foreground">Years as Outlier: </span>
                 <span className="font-semibold">{yearsVerified} of {flagYears.length}</span>
               </div>
+              <div>
+                <span className="text-muted-foreground">Drug %: </span>
+                <span className="font-semibold">
+                  {(() => {
+                    const latest = metricsData?.[metricsData.length - 1];
+                    const dp = latest?.drug_pct;
+                    return dp != null ? `${Math.floor(dp * 1000) / 10}%` : 'N/A';
+                  })()}
+                </span>
+              </div>
             </div>
           </CardContent>
         )}
