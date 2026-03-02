@@ -371,6 +371,7 @@ export async function generateProviderPDF(
     doc.setFontSize(10);
     doc.setTextColor(...COLORS.gray);
     doc.text('No specific data context flags identified for this provider.', MARGIN, y);
+    y += 16;
   } else {
     insights.forEach((ins) => {
       doc.setFont('helvetica', 'normal');
