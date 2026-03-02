@@ -19,6 +19,8 @@ interface FlagYear {
 interface ProviderChartsProps {
   flagYears: FlagYear[];
   formatCurrency: (value: number) => string;
+  barChartRef?: React.RefObject<HTMLDivElement>;
+  lineChartRef?: React.RefObject<HTMLDivElement>;
 }
 
 interface ChartDataPoint {
@@ -101,7 +103,7 @@ const CustomLineTooltip = ({
   );
 };
 
-export function ProviderCharts({ flagYears, formatCurrency }: ProviderChartsProps) {
+export function ProviderCharts({ flagYears, formatCurrency, barChartRef, lineChartRef }: ProviderChartsProps) {
   // Filter to years with valid provider data
   const validYears = flagYears.filter(y => y.allowedPerBeneDollars !== null);
   
@@ -141,7 +143,7 @@ export function ProviderCharts({ flagYears, formatCurrency }: ProviderChartsProp
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {/* Bar Chart: Provider vs Peer Median */}
-      <Card>
+      <Card ref={barChartRef}>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <BarChart3 className="h-4 w-4" />
@@ -195,7 +197,7 @@ export function ProviderCharts({ flagYears, formatCurrency }: ProviderChartsProp
 
       {/* Line Chart: Trend Over Time (only if 2+ years) */}
       {showLineChart && (
-        <Card>
+        <Card ref={lineChartRef}>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="h-4 w-4" />
