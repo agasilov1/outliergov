@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown, Star } from 'lucide-react';
-import { PossibleExplanations } from '@/components/PossibleExplanations';
+import { DataContextCard } from '@/components/DataContextCard';
 import { ProviderCharts } from '@/components/ProviderCharts';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useMemo, useState } from 'react';
@@ -34,6 +34,9 @@ interface ProviderYearMetric {
   percentile_rank: number | null;
   x_vs_peer_median: number | null;
   verified_top_0_5: boolean | null;
+  drug_pct: number | null;
+  bene_avg_risk_score: number | null;
+  tot_hcpcs_cds: number | null;
 }
 
 interface FlagYear {
@@ -163,7 +166,7 @@ export default function ProviderDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('provider_year_metrics')
-        .select('npi, year, provider_name, specialty, state, entity_type, tot_allowed_cents, tot_benes, tot_srvcs, allowed_per_bene_cents, peer_median_allowed_per_bene, peer_p75_allowed_per_bene, peer_p995_allowed_per_bene, peer_group_size, percentile_rank, x_vs_peer_median, verified_top_0_5')
+        .select('npi, year, provider_name, specialty, state, entity_type, tot_allowed_cents, tot_benes, tot_srvcs, allowed_per_bene_cents, peer_median_allowed_per_bene, peer_p75_allowed_per_bene, peer_p995_allowed_per_bene, peer_group_size, percentile_rank, x_vs_peer_median, verified_top_0_5, drug_pct, bene_avg_risk_score, tot_hcpcs_cds')
         .eq('npi', npi)
         .order('year');
       if (error) throw error;
@@ -810,8 +813,19 @@ export default function ProviderDetail() {
         </Collapsible>
       )}
 
-      {/* Possible Explanations */}
-      <PossibleExplanations />
+      {/* Data Context Card */}
+      {metricsData && metricsData.length > 0 && (() => {
+        const latest = metricsData[metricsData.length - 1];
+        return (
+          <DataContextCard
+            drugPct={latest.drug_pct}
+            totBenes={latest.tot_benes}
+            beneAvgRiskScore={latest.bene_avg_risk_score}
+            totHcpcsCds={latest.tot_hcpcs_cds}
+            entityType={latest.entity_type}
+          />
+        );
+      })()}
 
       {/* Watermark footer for screenshot protection */}
       <div className="text-center text-xs text-muted-foreground py-4 border-t mt-6 space-y-1">

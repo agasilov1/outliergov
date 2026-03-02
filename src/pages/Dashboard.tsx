@@ -35,6 +35,7 @@ interface OutlierRegistry {
   years_as_outlier: number | null;
   max_x_vs_peer_median: number | null;
   max_total_allowed: number | null;
+  drug_pct: number | null;
 }
 
 interface RankedProvider {
@@ -45,6 +46,7 @@ interface RankedProvider {
   yearsAsOutlier: number;
   maxPeerRatio: number | null;
   maxTotalAllowed: number;
+  drugPct: number | null;
   rank: number;
 }
 
@@ -53,6 +55,7 @@ interface QueryParams {
   states: string[];
   specialties: string[];
   excludeInstitutional: boolean;
+  excludeDrugDominant: boolean;
   watchlistOnly: boolean;
   watchlistNpis: string[];
 }
@@ -102,6 +105,7 @@ export default function Dashboard() {
   const stateFilter = searchParams.get('states')?.split(',').filter(Boolean) || [];
   const specialtyFilter = searchParams.get('specs')?.split(',').filter(Boolean) || [];
   const excludeInstitutional = searchParams.get('exInst') !== 'false'; // default true
+  const excludeDrugDominant = searchParams.get('exDrug') !== 'false'; // default true
   const watchlistOnly = searchParams.get('watchlist') === 'true';
 
   // Build query parameters for server-side filtering
@@ -111,14 +115,18 @@ export default function Dashboard() {
     states: stateFilter,
     specialties: specialtyFilter,
     excludeInstitutional,
+    excludeDrugDominant,
     watchlistOnly,
     watchlistNpis: watchlistNpisArray,
-  }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional, watchlistOnly, watchlistNpisArray]);
+  }), [searchQuery, stateFilter, specialtyFilter, excludeInstitutional, excludeDrugDominant, watchlistOnly, watchlistNpisArray]);
 
   // Shared filter builder - ensures count and data queries use identical filters
   const applyFilters = useCallback((query: any, params: QueryParams) => {
     if (params.excludeInstitutional) {
       query = query.eq('is_institutional', false);
+    }
+    if (params.excludeDrugDominant) {
+      query = query.or('drug_pct.lt.0.8,drug_pct.is.null');
     }
     if (params.states.length > 0) {
       query = query.in('state', params.states);
@@ -164,7 +172,7 @@ export default function Dashboard() {
 
       let query = supabase
         .from('outlier_registry')
-        .select('npi, provider_name, specialty, state, years_as_outlier, max_x_vs_peer_median, max_total_allowed')
+        .select('npi, provider_name, specialty, state, years_as_outlier, max_x_vs_peer_median, max_total_allowed, drug_pct')
         .order('max_x_vs_peer_median', { ascending: false, nullsFirst: false })
         .order('max_total_allowed', { ascending: false, nullsFirst: false });
 
@@ -252,6 +260,7 @@ export default function Dashboard() {
       yearsAsOutlier: row.years_as_outlier || 0,
       maxPeerRatio: row.max_x_vs_peer_median,
       maxTotalAllowed: row.max_total_allowed || 0,
+      drugPct: row.drug_pct,
       rank: (currentPage - 1) * ITEMS_PER_PAGE + index + 1
     }));
   }, [registryData, currentPage]);
@@ -486,6 +495,8 @@ export default function Dashboard() {
             filteredCount={filteredCount || 0}
             excludeInstitutional={excludeInstitutional}
             onExcludeInstitutionalChange={(val) => updateFilters({ exInst: val ? null : 'false' })}
+            excludeDrugDominant={excludeDrugDominant}
+            onExcludeDrugDominantChange={(val) => updateFilters({ exDrug: val ? null : 'false' })}
             searchQuery={searchQuery}
             onSearchChange={(q) => updateFilters({ q: q || null })}
           />
@@ -571,6 +582,7 @@ export default function Dashboard() {
                         </TooltipProvider>
                       </TableHead>
                       <TableHead className="text-right">Max Allowed</TableHead>
+                      <TableHead className="text-right">Drug %</TableHead>
                       <TableHead className="text-center">
                         <TooltipProvider>
                           <Tooltip>
@@ -640,6 +652,9 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
                             {formatCurrency(provider.maxTotalAllowed)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {provider.drugPct !== null ? `${(provider.drugPct * 100).toFixed(1)}%` : '—'}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={provider.yearsAsOutlier >= 2 ? "destructive" : "secondary"}>

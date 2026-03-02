@@ -440,6 +440,8 @@ export type Database = {
       outlier_registry: {
         Row: {
           created_at: string | null
+          drug_pct: number | null
+          entity_type: string | null
           is_institutional: boolean | null
           max_total_allowed: number | null
           max_x_vs_peer_median: number | null
@@ -451,6 +453,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          drug_pct?: number | null
+          entity_type?: string | null
           is_institutional?: boolean | null
           max_total_allowed?: number | null
           max_x_vs_peer_median?: number | null
@@ -462,6 +466,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          drug_pct?: number | null
+          entity_type?: string | null
           is_institutional?: boolean | null
           max_total_allowed?: number | null
           max_x_vs_peer_median?: number | null
