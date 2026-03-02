@@ -275,14 +275,16 @@ export async function generateProviderPDF(
   y += 16;
 
   const maxAllowed = Math.max(...data.flagYears.map(f => f.totalAllowedDollars));
+  const drugPctValue = data.dataContext.drugPct;
   const metrics = [
     { label: 'Max Allowed Amount', value: formatCurrency(maxAllowed) },
     { label: 'Years as Outlier', value: `${data.yearsVerified} of ${data.flagYears.length}` },
     { label: 'Peer Group', value: `${data.specialty}, ${data.state}` },
     { label: 'Peer Group Size', value: latestYear?.peerGroupSize ? `${latestYear.peerGroupSize.toLocaleString()} providers` : 'N/A' },
+    { label: 'Drug %', value: drugPctValue != null ? `${Math.floor(drugPctValue * 1000) / 10}%` : 'N/A' },
   ];
 
-  const metricW = CONTENT_W / 4;
+  const metricW = CONTENT_W / 5;
   metrics.forEach((m, i) => {
     const x = MARGIN + i * metricW;
     doc.setFont('helvetica', 'normal');
