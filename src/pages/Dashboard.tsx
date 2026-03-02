@@ -294,8 +294,8 @@ export default function Dashboard() {
     }).format(value);
   };
 
-  const handleRowClick = (npi: string, rank: number, totalCount: number) => {
-    navigate(`/provider/${npi}?rank=${rank}&total=${totalCount}&returnTo=${encodeURIComponent(location.search)}`);
+  const handleRowClick = (npi: string) => {
+    navigate(`/provider/${npi}?returnTo=${encodeURIComponent(location.search)}`);
   };
 
   const getProviderDisplayName = (provider: RankedProvider) => {
@@ -608,7 +608,7 @@ export default function Dashboard() {
                         <TableRow
                           key={provider.npi}
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => handleRowClick(provider.npi, provider.rank, filteredCount || 0)}
+                          onClick={() => handleRowClick(provider.npi)}
                         >
                           {/* Star / Watchlist */}
                           <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
@@ -654,7 +654,7 @@ export default function Dashboard() {
                             {formatCurrency(provider.maxTotalAllowed)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            {provider.drugPct !== null ? `${(provider.drugPct * 100).toFixed(1)}%` : '—'}
+                            {provider.drugPct !== null ? `${Math.floor(provider.drugPct * 1000) / 10}%` : '—'}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={provider.yearsAsOutlier >= 2 ? "destructive" : "secondary"}>
