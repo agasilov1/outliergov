@@ -1,41 +1,24 @@
 
 
-## Plan: Fix PDF — Overlapping Elements, Fonts, and Stretched Charts
+## Plan: Fix Drug % N/A + Add Drug % to PDF
 
-### Issues identified
+### Root Cause: Drug % showing N/A
+The code always picks the **last year** (`metricsData[metricsData.length - 1]`) for Drug %. For NPI 1356441943, the 2023 row has `drug_pct = null` while the 2022 row has `drug_pct = 0.999836`. The CMS data simply doesn't include drug breakdown for 2023 for this provider.
 
-1. **Overlapping elements on page 1**: Several spacing gaps are too tight (e.g., only 12pt after outlier box, 14pt between sections). The "Peer Group Snapshot" title/subtitle spacing is cramped.
+**Fix**: Fall back to the most recent year that has a non-null `drug_pct` value, instead of always using the last year. Apply this in both the UI display and the PDF data context.
 
-2. **Font issues**: jsPDF's built-in `helvetica` looks poor at PDF rendering. Will switch to using **Helvetica** but with better size/weight discipline. The real issue is inconsistent sizing — some labels are 8pt, some 10pt, the outlier title is 11pt instead of 13pt, etc.
+### Add Drug % to PDF export
+Currently the PDF has no explicit Drug % line. Add it to the Key Metrics row on page 1 (change from 4 metrics to 5, or replace "Peer Group Size" which is already shown in the Peer Group Snapshot above). Simpler approach: add a "Drug %" item as a 5th metric in the key metrics row using a 5-column layout.
 
-3. **Stretched charts**: The charts are captured at their DOM aspect ratio (roughly square cards in a 2-col grid) but rendered as `CONTENT_W × 200pt` (504×200), which stretches them horizontally. Fix: calculate the image height from the captured canvas's actual aspect ratio instead of hardcoding 200pt.
+### Changes to `src/pages/ProviderDetail.tsx`
+1. **Drug % display (line ~549)**: Instead of `metricsData[metricsData.length - 1]?.drug_pct`, find the last entry with a non-null `drug_pct`: `[...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct`
+2. **PDF dataContext (line ~145)**: Same fallback — find the most recent year with non-null `drug_pct` instead of using `latest?.drug_pct`
+3. **DataContextCard props (line ~868)**: Same fallback for the `drugPct` prop passed to DataContextCard
 
 ### Changes to `src/lib/generateProviderPDF.ts`
-
-**Fix stretched charts (page 2):**
-- After capturing each chart image, calculate the actual aspect ratio from the canvas dimensions
-- Instead of `const imgH = 200`, compute: `const imgH = CONTENT_W * (canvas.height / canvas.width)`
-- Cap max height at ~250pt so it doesn't overflow the page
-- Change `captureChart` to return `{ dataUrl, width, height }` instead of just the data URL string, so aspect ratio info is available
-
-**Fix overlapping / spacing:**
-- Increase gap after outlier box: `y += boxHeight + 16` (was +12)
-- Increase gap after Peer Group Snapshot subtitle before grid: `y += 16` (was +14)
-- Increase gap after grid: `y += 54` (was +50)
-- Increase gap after provider value line: `y += 20` (was +16)
-- Increase gap after key metrics row: `y += 34` (was +30)
-- Increase gap after data context title: `y += 14` (was +12)
-
-**Fix fonts to spec:**
-- Outlier box title: change from 11pt to 13pt bold
-- Outlier box description: keep 8pt
-- All section titles consistently 13pt bold
-- Body labels consistently 10pt
-- Secondary/small text consistently 8pt
-- Peer snapshot values: 14pt bold (already correct)
-- Peer median badge: 16pt bold (already correct)
-- Footer: 7pt (already correct)
+1. **Add `drugPct` to the Key Metrics row** (line ~278): Add a 5th metric "Drug %" showing the value formatted as a percentage, or "N/A" if null. Adjust column width from `CONTENT_W / 4` to `CONTENT_W / 5`.
 
 ### Files to modify
-- **`src/lib/generateProviderPDF.ts`** — All fixes in one pass
+- `src/pages/ProviderDetail.tsx` — fallback logic for drug_pct
+- `src/lib/generateProviderPDF.ts` — add Drug % to key metrics row
 
