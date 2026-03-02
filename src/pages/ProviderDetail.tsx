@@ -67,12 +67,8 @@ export default function ProviderDetail() {
   const [searchResults, setSearchResults] = useState<{npi: string, provider_name: string | null, specialty: string | null}[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
-  // Get rank and returnTo from URL params
-  const rankFromUrl = searchParams.get('rank');
-  const totalFromUrl = searchParams.get('total');
+  // Get returnTo from URL params (rank/total now self-computed)
   const returnTo = searchParams.get('returnTo');
-  const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
-  const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : 5885;
 
   // Log provider view for audit
   useEffect(() => {
@@ -225,17 +221,47 @@ export default function ProviderDetail() {
   // Get latest year for peer group snapshot (data is sorted ascending)
   const latestYear = flagYears.length > 0 ? flagYears[flagYears.length - 1] : null;
 
+  // Self-compute unfiltered rank from outlier_registry
+  const { data: registryRank } = useQuery({
+    queryKey: ['provider-registry-rank', npi, bestPeerRatio],
+    queryFn: async () => {
+      // Get total count
+      const { count: totalCount } = await supabase
+        .from('outlier_registry')
+        .select('npi', { count: 'exact', head: true });
+
+      // Get provider's max_x_vs_peer_median from registry
+      const { data: providerRow } = await supabase
+        .from('outlier_registry')
+        .select('max_x_vs_peer_median')
+        .eq('npi', npi!)
+        .single();
+
+      if (!providerRow || providerRow.max_x_vs_peer_median === null) {
+        return { rank: null, total: totalCount || 0 };
+      }
+
+      // Count how many have higher value = providers ranked above
+      const { count: higherCount } = await supabase
+        .from('outlier_registry')
+        .select('npi', { count: 'exact', head: true })
+        .gt('max_x_vs_peer_median', providerRow.max_x_vs_peer_median);
+
+      return { rank: (higherCount || 0) + 1, total: totalCount || 0 };
+    },
+    enabled: !!npi,
+  });
+
+  const rank = registryRank?.rank ?? null;
+  const totalProviders = registryRank?.total ?? null;
+
   // Top X% ranking context
   const topPercentage = useMemo(() => {
-    const rankFromUrl = searchParams.get('rank');
-    const totalFromUrl = searchParams.get('total');
-    const rank = rankFromUrl ? parseInt(rankFromUrl) : null;
-    const totalProviders = totalFromUrl ? parseInt(totalFromUrl) : null;
     if (rank && totalProviders) {
       return ((rank / totalProviders) * 100).toFixed(1);
     }
     return null;
-  }, [searchParams]);
+  }, [rank, totalProviders]);
 
   // YoY delta helper with divide-by-zero guard
   const getYoYDelta = (currentIndex: number): number | null => {
@@ -428,7 +454,7 @@ export default function ProviderDetail() {
                 <span>{provider.state}</span>
               </CardDescription>
               {/* Rank indicator with Top X% */}
-              {rank && (
+              {rank && totalProviders && (
                 <p className="text-sm text-muted-foreground mt-2">
                   Ranked #{rank} of {totalProviders.toLocaleString()} 
                   {topPercentage && <span className="font-medium"> (Top {topPercentage}%)</span>}

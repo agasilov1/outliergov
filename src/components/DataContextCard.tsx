@@ -21,7 +21,7 @@ export function DataContextCard({ drugPct, totBenes, beneAvgRiskScore, totHcpcsC
   if (drugPct !== null && drugPct > 0.8) {
     insights.push({
       icon: <Pill className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />,
-      text: `${(drugPct * 100).toFixed(1)}% of this provider's billing is drug-related. High allowed amounts are driven by medication costs, not service volume. This is common for providers administering specialty pharmaceuticals such as clotting factors, chemotherapy, or biologics.`,
+      text: `${Math.floor(drugPct * 1000) / 10}% of this provider's billing is drug-related. High allowed amounts are driven by medication costs, not service volume. This is common for providers administering specialty pharmaceuticals such as clotting factors, chemotherapy, or biologics.`,
     });
   }
 
