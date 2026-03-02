@@ -681,8 +681,13 @@ export type Database = {
       provider_year_metrics: {
         Row: {
           allowed_per_bene_cents: number | null
+          bene_avg_age: number | null
+          bene_avg_risk_score: number | null
           created_at: string | null
+          drug_allowed_cents: number | null
+          drug_pct: number | null
           entity_type: string | null
+          med_allowed_cents: number | null
           npi: string
           peer_group_size: number | null
           peer_median_allowed_per_bene: number | null
@@ -694,6 +699,7 @@ export type Database = {
           state: string | null
           tot_allowed_cents: number | null
           tot_benes: number | null
+          tot_hcpcs_cds: number | null
           tot_srvcs: number | null
           tot_stdzd_cents: number | null
           verified_top_0_5: boolean | null
@@ -703,8 +709,13 @@ export type Database = {
         }
         Insert: {
           allowed_per_bene_cents?: number | null
+          bene_avg_age?: number | null
+          bene_avg_risk_score?: number | null
           created_at?: string | null
+          drug_allowed_cents?: number | null
+          drug_pct?: number | null
           entity_type?: string | null
+          med_allowed_cents?: number | null
           npi: string
           peer_group_size?: number | null
           peer_median_allowed_per_bene?: number | null
@@ -716,6 +727,7 @@ export type Database = {
           state?: string | null
           tot_allowed_cents?: number | null
           tot_benes?: number | null
+          tot_hcpcs_cds?: number | null
           tot_srvcs?: number | null
           tot_stdzd_cents?: number | null
           verified_top_0_5?: boolean | null
@@ -725,8 +737,13 @@ export type Database = {
         }
         Update: {
           allowed_per_bene_cents?: number | null
+          bene_avg_age?: number | null
+          bene_avg_risk_score?: number | null
           created_at?: string | null
+          drug_allowed_cents?: number | null
+          drug_pct?: number | null
           entity_type?: string | null
+          med_allowed_cents?: number | null
           npi?: string
           peer_group_size?: number | null
           peer_median_allowed_per_bene?: number | null
@@ -738,6 +755,7 @@ export type Database = {
           state?: string | null
           tot_allowed_cents?: number | null
           tot_benes?: number | null
+          tot_hcpcs_cds?: number | null
           tot_srvcs?: number | null
           tot_stdzd_cents?: number | null
           verified_top_0_5?: boolean | null
