@@ -276,17 +276,16 @@ export async function generateProviderPDF(
 
   const maxAllowed = Math.max(...data.flagYears.map(f => f.totalAllowedDollars));
   const drugPctValue = data.dataContext.drugPct;
-  const metrics = [
+
+  // Row 1: Max Allowed Amount | Years as Outlier | Drug %
+  const row1 = [
     { label: 'Max Allowed Amount', value: formatCurrency(maxAllowed) },
     { label: 'Years as Outlier', value: `${data.yearsVerified} of ${data.flagYears.length}` },
-    { label: 'Peer Group', value: `${data.specialty}, ${data.state}` },
-    { label: 'Peer Group Size', value: latestYear?.peerGroupSize ? `${latestYear.peerGroupSize.toLocaleString()} providers` : 'N/A' },
     { label: 'Drug %', value: drugPctValue != null ? `${Math.floor(drugPctValue * 1000) / 10}%` : 'N/A' },
   ];
-
-  const metricW = CONTENT_W / 5;
-  metrics.forEach((m, i) => {
-    const x = MARGIN + i * metricW;
+  const row1W = CONTENT_W / 3;
+  row1.forEach((m, i) => {
+    const x = MARGIN + i * row1W;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.gray);
@@ -297,7 +296,25 @@ export async function generateProviderPDF(
     doc.text(m.value, x, y + 14);
   });
 
-  y += 34;
+  // Row 2: Peer Group | Peer Group Size
+  const row2 = [
+    { label: 'Peer Group', value: `${data.specialty}, ${data.state}` },
+    { label: 'Peer Group Size', value: latestYear?.peerGroupSize ? `${latestYear.peerGroupSize.toLocaleString()} providers` : 'N/A' },
+  ];
+  const row2W = CONTENT_W / 2;
+  row2.forEach((m, i) => {
+    const x = MARGIN + i * row2W;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.gray);
+    doc.text(m.label, x, y + 28);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.black);
+    doc.text(m.value, x, y + 42);
+  });
+
+  y += 56;
 
   // ===== DATA CONTEXT (on page 1) =====
   doc.setDrawColor(220, 220, 220);
@@ -376,39 +393,8 @@ export async function generateProviderPDF(
     });
   }
 
-  addFooter(doc, 1);
-
-  // ===== PAGE 2 =====
-  doc.addPage();
-  y = MARGIN;
-
-  if (barCapture) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...COLORS.black);
-    doc.text('Allowed per Beneficiary Comparison', MARGIN, y);
-    y += 14;
-    const imgH = getChartImgHeight(barCapture);
-    doc.addImage(barCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
-    y += imgH + 18;
-  }
-
-  if (lineCapture) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...COLORS.black);
-    doc.text('Trend Over Time', MARGIN, y);
-    y += 14;
-    const imgH = getChartImgHeight(lineCapture);
-    doc.addImage(lineCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
-    y += imgH + 18;
-  }
-
-  if (y > PAGE_H - 200) {
-    doc.addPage();
-    y = MARGIN;
-  }
-
+  // Per-Year Statistical Breakdown table (on page 1, after Data Context)
+  y += 8;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(...COLORS.black);
@@ -453,6 +439,34 @@ export async function generateProviderPDF(
       }
     },
   });
+
+  addFooter(doc, 1);
+
+  // ===== PAGE 2 (Charts only) =====
+  doc.addPage();
+  y = MARGIN;
+
+  if (barCapture) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...COLORS.black);
+    doc.text('Allowed per Beneficiary Comparison', MARGIN, y);
+    y += 14;
+    const imgH = getChartImgHeight(barCapture);
+    doc.addImage(barCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
+    y += imgH + 18;
+  }
+
+  if (lineCapture) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...COLORS.black);
+    doc.text('Trend Over Time', MARGIN, y);
+    y += 14;
+    const imgH = getChartImgHeight(lineCapture);
+    doc.addImage(lineCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
+    y += imgH + 18;
+  }
 
   addFooter(doc, 2);
 
