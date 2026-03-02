@@ -53,6 +53,12 @@ const COLORS = {
   footerGray: [107, 114, 128] as [number, number, number],
 };
 
+interface ChartCapture {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -71,7 +77,7 @@ function addFooter(doc: jsPDF, pageNum: number) {
   doc.text(`Page ${pageNum} of ${TOTAL_PAGES}`, PAGE_W - MARGIN, y, { align: 'right' });
 }
 
-async function captureChart(element: HTMLElement | null): Promise<string | null> {
+async function captureChart(element: HTMLElement | null): Promise<ChartCapture | null> {
   if (!element) return null;
   try {
     const canvas = await html2canvas(element, {
@@ -80,11 +86,20 @@ async function captureChart(element: HTMLElement | null): Promise<string | null>
       logging: false,
       useCORS: true,
     });
-    return canvas.toDataURL('image/png');
+    return {
+      dataUrl: canvas.toDataURL('image/png'),
+      width: canvas.width,
+      height: canvas.height,
+    };
   } catch (e) {
     console.error('Chart capture failed:', e);
     return null;
   }
+}
+
+function getChartImgHeight(capture: ChartCapture, maxH = 280): number {
+  const ratio = capture.height / capture.width;
+  return Math.min(CONTENT_W * ratio, maxH);
 }
 
 export async function generateProviderPDF(
@@ -94,7 +109,7 @@ export async function generateProviderPDF(
 ): Promise<void> {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
 
-  const [barImg, lineImg] = await Promise.all([
+  const [barCapture, lineCapture] = await Promise.all([
     captureChart(barChartEl),
     captureChart(lineChartEl),
   ]);
@@ -115,7 +130,7 @@ export async function generateProviderPDF(
   doc.text('Statistical analysis only – Not a finding of fraud or wrongdoing', PAGE_W - MARGIN, 20, { align: 'right' });
   doc.text('Data Source: CMS Medicare Part B | For internal screening use only', PAGE_W - MARGIN, 32, { align: 'right' });
 
-  y = 75;
+  y = 78;
 
   // Provider name (bold 20pt)
   doc.setTextColor(...COLORS.black);
@@ -134,7 +149,7 @@ export async function generateProviderPDF(
     doc.text(badge, MARGIN + nameW + 13, y - 1);
   }
 
-  y += 20;
+  y += 22;
 
   // NPI / specialty / state line (10pt body)
   doc.setFont('helvetica', 'normal');
@@ -150,7 +165,7 @@ export async function generateProviderPDF(
     );
   }
 
-  y += 14;
+  y += 18;
 
   // Peer ratio badge (bold 16pt)
   if (data.bestPeerRatio) {
@@ -162,7 +177,7 @@ export async function generateProviderPDF(
     doc.roundedRect(MARGIN, y, tw, 26, 4, 4, 'F');
     doc.setTextColor(...COLORS.white);
     doc.text(badgeText, MARGIN + 10, y + 18);
-    y += 36;
+    y += 38;
   }
 
   // Verified Outlier box — dynamic height
@@ -170,7 +185,7 @@ export async function generateProviderPDF(
   const outlierDesc = `This provider's Medicare allowed amount per beneficiary was approximately ${data.bestPeerRatio?.toFixed(1) || '?'}× the peer median within a specialty–state comparison group of ${latestYear?.peerGroupSize?.toLocaleString() || '?'} providers. This is statistical variance only—not evidence of wrongdoing.`;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(13);
   doc.setTextColor(...COLORS.red);
   const outlierTitle = `Verified Statistical Outlier — ${data.specialty}, ${data.state}`;
 
@@ -178,21 +193,21 @@ export async function generateProviderPDF(
   doc.setFontSize(8);
   const splitDesc = doc.splitTextToSize(outlierDesc, CONTENT_W - 20);
   const descHeight = splitDesc.length * 10;
-  const boxHeight = 22 + descHeight + 8;
+  const boxHeight = 24 + descHeight + 10;
 
   doc.setFillColor(...COLORS.redLight);
   doc.setDrawColor(239, 68, 68);
   doc.roundedRect(MARGIN, y, CONTENT_W, boxHeight, 4, 4, 'FD');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(13);
   doc.setTextColor(...COLORS.red);
-  doc.text(outlierTitle, MARGIN + 10, y + 16);
+  doc.text(outlierTitle, MARGIN + 10, y + 18);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.black);
-  doc.text(splitDesc, MARGIN + 10, y + 28);
+  doc.text(splitDesc, MARGIN + 10, y + 32);
 
-  y += boxHeight + 12;
+  y += boxHeight + 16;
 
   // Peer Group Snapshot
   if (latestYear && latestYear.peerGroupSize) {
@@ -200,12 +215,12 @@ export async function generateProviderPDF(
     doc.setFontSize(13);
     doc.setTextColor(...COLORS.black);
     doc.text(`Peer Group Snapshot (${latestYear.year})`, MARGIN, y);
-    y += 12;
+    y += 14;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.gray);
     doc.text(`Distribution within ${data.specialty}, ${data.state} peer group`, MARGIN, y);
-    y += 14;
+    y += 16;
 
     const gridItems = [
       { label: 'Peer Group Size', value: latestYear.peerGroupSize?.toLocaleString() || 'N/A' },
@@ -230,7 +245,7 @@ export async function generateProviderPDF(
       doc.text(item.value, x, y + 32);
     });
 
-    y += 50;
+    y += 54;
 
     // Provider value line (10pt body)
     doc.setFont('helvetica', 'normal');
@@ -251,13 +266,13 @@ export async function generateProviderPDF(
       doc.roundedRect(px, y - 9, mw, 13, 3, 3, 'F');
       doc.text(medText, px + 5, y);
     }
-    y += 16;
+    y += 20;
   }
 
   // Key Metrics row
   doc.setDrawColor(220, 220, 220);
   doc.line(MARGIN, y, PAGE_W - MARGIN, y);
-  y += 14;
+  y += 16;
 
   const maxAllowed = Math.max(...data.flagYears.map(f => f.totalAllowedDollars));
   const metrics = [
@@ -277,21 +292,21 @@ export async function generateProviderPDF(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(...COLORS.black);
-    doc.text(m.value, x, y + 12);
+    doc.text(m.value, x, y + 14);
   });
 
-  y += 30;
+  y += 34;
 
   // ===== DATA CONTEXT (on page 1) =====
   doc.setDrawColor(220, 220, 220);
   doc.line(MARGIN, y, PAGE_W - MARGIN, y);
-  y += 14;
+  y += 16;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(...COLORS.black);
   doc.text('Data Context', MARGIN, y);
-  y += 12;
+  y += 14;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.gray);
@@ -365,26 +380,26 @@ export async function generateProviderPDF(
   doc.addPage();
   y = MARGIN;
 
-  if (barImg) {
+  if (barCapture) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...COLORS.black);
     doc.text('Allowed per Beneficiary Comparison', MARGIN, y);
-    y += 10;
-    const imgH = 200;
-    doc.addImage(barImg, 'PNG', MARGIN, y, CONTENT_W, imgH);
-    y += imgH + 16;
+    y += 14;
+    const imgH = getChartImgHeight(barCapture);
+    doc.addImage(barCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
+    y += imgH + 18;
   }
 
-  if (lineImg) {
+  if (lineCapture) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...COLORS.black);
     doc.text('Trend Over Time', MARGIN, y);
-    y += 10;
-    const imgH = 200;
-    doc.addImage(lineImg, 'PNG', MARGIN, y, CONTENT_W, imgH);
-    y += imgH + 16;
+    y += 14;
+    const imgH = getChartImgHeight(lineCapture);
+    doc.addImage(lineCapture.dataUrl, 'PNG', MARGIN, y, CONTENT_W, imgH);
+    y += imgH + 18;
   }
 
   if (y > PAGE_H - 200) {
