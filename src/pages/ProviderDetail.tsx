@@ -129,6 +129,7 @@ export default function ProviderDetail() {
     setIsGeneratingPDF(true);
     try {
       const latest = metricsData?.[metricsData.length - 1];
+      const drugPctFallback = metricsData ? [...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct ?? null : null;
       const pdfData: PDFProviderData = {
         npi: provider.npi,
         providerName: getProviderDisplayName(),
@@ -142,7 +143,7 @@ export default function ProviderDetail() {
         yearsVerified,
         flagYears,
         dataContext: {
-          drugPct: latest?.drug_pct ?? null,
+          drugPct: drugPctFallback,
           totBenes: latest?.tot_benes ?? null,
           beneAvgRiskScore: latest?.bene_avg_risk_score ?? null,
           totHcpcsCds: latest?.tot_hcpcs_cds ?? null,
@@ -546,8 +547,7 @@ export default function ProviderDetail() {
                 <span className="text-muted-foreground">Drug %: </span>
                 <span className="font-semibold">
                   {(() => {
-                    const latest = metricsData?.[metricsData.length - 1];
-                    const dp = latest?.drug_pct;
+                    const dp = metricsData ? [...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct ?? null : null;
                     return dp != null ? `${Math.floor(dp * 1000) / 10}%` : 'N/A';
                   })()}
                 </span>
@@ -863,9 +863,10 @@ export default function ProviderDetail() {
       {/* Data Context Card */}
       {metricsData && metricsData.length > 0 && (() => {
         const latest = metricsData[metricsData.length - 1];
+        const drugPctFallback = [...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct ?? null;
         return (
           <DataContextCard
-            drugPct={latest.drug_pct}
+            drugPct={drugPctFallback}
             totBenes={latest.tot_benes}
             beneAvgRiskScore={latest.bene_avg_risk_score}
             totHcpcsCds={latest.tot_hcpcs_cds}
