@@ -1,33 +1,29 @@
 
 
-## Plan: Fix Data Context empty state spacing in PDF
+## Plan: Update Landing Page — Logo, Request Access, Contact Info
 
-### Problem
-When there are no Data Context insights, the fallback italic text is rendered but `y` is never incremented after it. The next section ("Per-Year Statistical Breakdown") starts immediately at the same `y`, causing overlap with the fallback text.
+### Changes to `src/pages/Index.tsx`
 
-### Fix in `src/lib/generateProviderPDF.ts`
+1. **Replace generic "O" box with uploaded logo**
+   - Copy `user-uploads://OutlierGOV-BfiRyYwq.png` to `src/assets/OutlierGOV-logo.png`
+   - Import it and replace the `<div className="flex h-14 w-14 ..."><span>O</span></div>` with an `<img>` tag using the logo (rounded, ~56px)
 
-**Line 373**: After rendering the fallback text, add `y += 16;` to advance past it. This matches the spacing the bulleted version naturally creates via `y += insightBoxH + 8` in the loop.
+2. **Add "Request Access" button**
+   - Add a secondary/outline button below the "Sign In" button that links to `mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request`
+   - Uses `<a>` wrapped in a Button with variant="outline"
 
-Change the empty-state block (lines 369-374) from:
-```
-if (insights.length === 0) {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLORS.gray);
-    doc.text('No specific data context flags identified for this provider.', MARGIN, y);
-  } else {
-```
-to:
-```
-if (insights.length === 0) {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLORS.gray);
-    doc.text('No specific data context flags identified for this provider.', MARGIN, y);
-    y += 16;
-  } else {
-```
+3. **Add contact line**
+   - Add `Contact: arif@gasilov.com` as a small text line below the buttons, above the legal links
 
-Single line addition. One file changed.
+### Layout order after changes
+- Logo image + "OutlierGov" title
+- Description paragraph
+- Sign In button
+- Request Access button (outline variant, mailto link)
+- "Contact: arif@gasilov.com" line
+- Privacy / Terms links
+
+### Files
+- Copy uploaded image to `src/assets/OutlierGOV-logo.png`
+- Edit `src/pages/Index.tsx`
 
