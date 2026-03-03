@@ -1,8 +1,15 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Mail, ArrowLeft } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
+
+const navLinks = [
+  { to: '/', label: 'Home' },
+  { to: '/medicare-billing-outlier-analysis', label: 'Medicare Billing' },
+  { to: '/qui-tam-research-tools', label: 'Qui Tam Tools' },
+  { to: '/healthcare-fraud-data-attorneys', label: 'Fraud Data' },
+];
 
 interface FAQItem {
   question: string;
@@ -58,14 +65,22 @@ export default function SEOLandingPage({ children, title, description, path, faq
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
       {/* Header */}
-      <header className="mb-10">
-        <Link to="/" className="mb-6 flex items-center gap-3">
+      <header className="mb-6">
+        <Link to="/" className="mb-4 flex items-center gap-3">
           <img src={outlierLogo} alt="OutlierGov logo" className="h-10 w-10 rounded-lg object-contain" />
           <span className="text-xl font-bold text-foreground">OutlierGov</span>
         </Link>
-        <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3 w-3" /> Back to home
-        </Link>
+        <nav className="flex flex-wrap gap-3 text-sm">
+          {navLinks.map(link => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`hover:text-foreground ${link.to === path ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       {/* Page content */}
