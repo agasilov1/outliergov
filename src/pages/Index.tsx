@@ -61,6 +61,22 @@ const Index = () => {
         </p>
       </div>
 
+      {/* Navigation cards */}
+      <div className="mb-10 grid w-full max-w-3xl gap-4 sm:grid-cols-3">
+        <Link to="/medicare-billing-outlier-analysis" className="rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent">
+          <h2 className="font-semibold text-foreground">Medicare Billing Outlier Analysis</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Peer-normalized screening of every Medicare Part B provider.</p>
+        </Link>
+        <Link to="/qui-tam-research-tools" className="rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent">
+          <h2 className="font-semibold text-foreground">Qui Tam Research Tools</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Screen and prioritize False Claims Act cases.</p>
+        </Link>
+        <Link to="/healthcare-fraud-data-attorneys" className="rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent">
+          <h2 className="font-semibold text-foreground">Healthcare Fraud Data for Attorneys</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Searchable registry of Medicare billing outliers.</p>
+        </Link>
+      </div>
+
       {/* Buttons */}
       <div className="flex flex-col items-center gap-3">
         <Button size="lg" onClick={() => navigate('/auth')} className="gap-2">
