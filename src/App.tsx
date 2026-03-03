@@ -20,6 +20,9 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import ProviderCompare from "./pages/ProviderCompare";
+import MedicareBillingOutlierAnalysis from "./pages/MedicareBillingOutlierAnalysis";
+import QuiTamResearchTools from "./pages/QuiTamResearchTools";
+import HealthcareFraudDataAttorneys from "./pages/HealthcareFraudDataAttorneys";
 
 const queryClient = new QueryClient();
 
@@ -96,6 +99,9 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          <Route path="/medicare-billing-outlier-analysis" element={<MedicareBillingOutlierAnalysis />} />
+          <Route path="/qui-tam-research-tools" element={<QuiTamResearchTools />} />
+          <Route path="/healthcare-fraud-data-attorneys" element={<HealthcareFraudDataAttorneys />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
