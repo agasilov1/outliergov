@@ -1,50 +1,90 @@
 
 
-## Plan: Add Navigation to SEO Pages on Homepage
+## Plan: Redesign SEO Landing Pages and Homepage with Modern Visual Styling
 
 ### Problem
-The three SEO landing pages exist but there's no way to reach them from the homepage. Users landing on `/` have no idea those pages exist.
+The pages are walls of plain text with zero visual hierarchy, no spacing rhythm, no cards, no icons, no color accents. They look like unstyled HTML from the 90s.
+
+### Design Approach
+Professional SaaS-style landing pages: hero sections with gradient backgrounds, stat callout cards, icon-accented feature sections, proper whitespace, and visual rhythm. Keep it clean and authoritative (legal/gov audience) but visually engaging.
 
 ### Changes
 
-**`src/pages/Index.tsx`** — Add a navigation section between the description and the CTA buttons:
+**`src/components/SEOLandingPage.tsx`** — Full visual overhaul of the shared layout:
+- **Sticky header**: Full-width header with logo + nav, subtle border-bottom, proper padding
+- **Hero section**: Large H1 with a subtle gradient background band, introductory paragraph in larger text
+- **Content sections**: Children rendered inside styled cards with left-accent borders for H2 sections
+- **Stat callouts**: Add a slot for highlight numbers (e.g., "1.2M providers", "2,200 outliers", "50 states")
+- **FAQ section**: Styled as an accordion or cards with subtle backgrounds instead of flat text
+- **CTA section**: Full-width gradient band with centered button, not a lonely button at the bottom
+- **Footer**: Clean horizontal layout with proper spacing
 
-- Add a section with 3 linked cards/links to the SEO pages:
-  - "Medicare Billing Outlier Analysis" → `/medicare-billing-outlier-analysis`
-  - "Qui Tam Research Tools" → `/qui-tam-research-tools`
-  - "Healthcare Fraud Data for Attorneys" → `/healthcare-fraud-data-attorneys`
-- Style as a simple row of cards (or stacked on mobile) with the page title and a one-line description each
-- Uses `Link` from react-router-dom, no new dependencies
+**`src/pages/MedicareBillingOutlierAnalysis.tsx`** — Add visual elements:
+- Add a `stats` array: `[{value: "1.2M", label: "Providers Screened"}, {value: "Top 0.5%", label: "Threshold"}, {value: "2,200", label: "Flagged Providers"}]`
+- Pass stats to SEOLandingPage as a prop
+- Wrap content paragraphs in proper section containers
 
-**`src/components/SEOLandingPage.tsx`** — Add a nav bar at the top:
+**`src/pages/QuiTamResearchTools.tsx`** — Same treatment:
+- Stats: e.g., "4 Stages Supported", "50 States", "Public Data"
+- Proper section structure
 
-- Add a horizontal nav strip below the logo header with links to all 3 SEO pages plus a "Home" link back to `/`
-- Highlight the current page using the existing `useLocation` or path prop
-- This gives navigation between SEO pages without returning to the homepage each time
+**`src/pages/HealthcareFraudDataAttorneys.tsx`** — Same treatment:
+- Stats: "3.7M Records", "50 States", "PDF Export"
 
-### Layout after changes
+**`src/pages/Index.tsx`** — Homepage polish:
+- Hero section with gradient background behind the logo/title area
+- Navigation cards get icons (Search, Scale, FileText from lucide), more padding, hover shadows
+- Better vertical rhythm and spacing
+- CTA buttons in a row on desktop instead of stacked
 
-**Homepage (`/`):**
+### Visual Structure for Each SEO Page
+
 ```text
-[Logo + OutlierGov]
-[Description paragraph]
-┌─────────────────────┐  ┌──────────────────┐  ┌────────────────────────┐
-│ Medicare Billing     │  │ Qui Tam Research │  │ Healthcare Fraud Data  │
-│ Outlier Analysis     │  │ Tools            │  │ for Attorneys          │
-│ one-line summary     │  │ one-line summary │  │ one-line summary       │
-└─────────────────────┘  └──────────────────┘  └────────────────────────┘
-[Sign In]  [Request Access]
-[Contact info]  [Privacy / Terms]
+┌──────────────────────────────────────────────┐
+│ [Logo] OutlierGov    Home | Medicare | ...   │  ← sticky header
+├──────────────────────────────────────────────┤
+│                                              │
+│  ░░░░░░ gradient background ░░░░░░░░░░░░░░░  │
+│     H1: Medicare Billing Outlier Analysis    │
+│     Intro paragraph in larger text           │
+│                                              │
+│  ┌────────┐  ┌────────┐  ┌────────┐          │
+│  │ 1.2M   │  │Top 0.5%│  │ 2,200  │          │  ← stat cards
+│  │Screened│  │Threshold│  │Flagged │          │
+│  └────────┘  └────────┘  └────────┘          │
+│                                              │
+│  ┌─ How Peer Normalization Works ──────────┐ │
+│  │ accent border   paragraph text...       │ │  ← content cards
+│  └─────────────────────────────────────────┘ │
+│                                              │
+│  ┌─ Data Source and Methodology ───────────┐ │
+│  │ accent border   paragraph text...       │ │
+│  └─────────────────────────────────────────┘ │
+│                                              │
+│  ░░░░░ CTA gradient band ░░░░░░░░░░░░░░░░░  │
+│       [Request Access]                       │
+│       arif@gasilov.com                       │
+│                                              │
+│  FAQ (styled cards)                          │
+│  Related links                               │
+│  Footer                                     │
+└──────────────────────────────────────────────┘
 ```
 
-**SEO pages:**
-```text
-[Logo + OutlierGov]
-[Home | Medicare Billing | Qui Tam | Fraud Data]  ← nav links
-[H1, H2s, body, FAQ, Related, CTA, footer]
-```
+### Technical Details
+- Use existing design system colors: `--primary`, `--accent`, `--muted`, `--card`
+- Gradient backgrounds use Tailwind's `bg-gradient-to-br from-primary/5 to-accent/5`
+- Stat cards use the existing Card components from `ui/card.tsx`
+- FAQ items styled as bordered cards with padding
+- Nav gets `sticky top-0 z-50 bg-background/95 backdrop-blur` for scroll behavior
+- Add `stats` prop to `SEOLandingPageProps` as `{value: string, label: string}[]`
+- Icons from lucide-react for homepage cards (Search, Scale, FileText)
+- All changes are CSS/layout only — no new dependencies
 
-### Files modified
-- `src/pages/Index.tsx` — add navigation cards section
-- `src/components/SEOLandingPage.tsx` — add top nav bar with links to all pages + home
+### Files Modified
+- `src/components/SEOLandingPage.tsx` — major visual redesign
+- `src/pages/MedicareBillingOutlierAnalysis.tsx` — add stats, restructure content
+- `src/pages/QuiTamResearchTools.tsx` — add stats, restructure content
+- `src/pages/HealthcareFraudDataAttorneys.tsx` — add stats, restructure content
+- `src/pages/Index.tsx` — polish homepage with gradient hero, card icons, better layout
 
