@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Mail } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
 
 const navLinks = [
@@ -16,16 +17,23 @@ interface FAQItem {
   answer: string;
 }
 
+interface StatItem {
+  value: string;
+  label: string;
+}
+
 interface SEOLandingPageProps {
   children: ReactNode;
   title: string;
   description: string;
   path: string;
+  heroDescription?: string;
+  stats?: StatItem[];
   faqs?: FAQItem[];
   relatedLinks: { to: string; label: string }[];
 }
 
-export default function SEOLandingPage({ children, title, description, path, faqs, relatedLinks }: SEOLandingPageProps) {
+export default function SEOLandingPage({ children, title, description, path, heroDescription, stats, faqs, relatedLinks }: SEOLandingPageProps) {
   useEffect(() => {
     document.title = title;
 
@@ -63,76 +71,124 @@ export default function SEOLandingPage({ children, title, description, path, faq
   }, [title, description, path, faqs]);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      {/* Header */}
-      <header className="mb-6">
-        <Link to="/" className="mb-4 flex items-center gap-3">
-          <img src={outlierLogo} alt="OutlierGov logo" className="h-10 w-10 rounded-lg object-contain" />
-          <span className="text-xl font-bold text-foreground">OutlierGov</span>
-        </Link>
-        <nav className="flex flex-wrap gap-3 text-sm">
-          {navLinks.map(link => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`hover:text-foreground ${link.to === path ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+    <div className="min-h-screen bg-background">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
+          <Link to="/" className="flex items-center gap-2.5">
+            <img src={outlierLogo} alt="OutlierGov logo" className="h-8 w-8 rounded-lg object-contain" />
+            <span className="text-lg font-bold text-foreground">OutlierGov</span>
+          </Link>
+          <nav className="flex flex-wrap gap-1 text-sm">
+            {navLinks.map(link => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`rounded-md px-3 py-1.5 transition-colors hover:bg-accent hover:text-accent-foreground ${
+                  link.to === path
+                    ? 'bg-accent font-semibold text-accent-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </header>
 
-      {/* Page content */}
-      <article className="prose prose-neutral dark:prose-invert max-w-none">
-        {children}
-      </article>
+      {/* Hero Section */}
+      <section className="border-b bg-gradient-to-br from-primary/5 via-background to-accent/5">
+        <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
+          <article className="max-w-3xl">
+            {children}
+          </article>
+          {heroDescription && (
+            <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+              {heroDescription}
+            </p>
+          )}
+        </div>
+      </section>
 
-      {/* CTA */}
-      <div className="mt-12 flex flex-col items-start gap-3">
-        <Button size="lg" variant="outline" asChild className="gap-2">
-          <a href="mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request">
-            <Mail className="h-4 w-4" />
-            Request Access
-          </a>
-        </Button>
-        <p className="text-sm text-muted-foreground">
-          Contact: <a href="mailto:arif@gasilov.com" className="underline hover:text-foreground">arif@gasilov.com</a>
-        </p>
-      </div>
-
-      {/* FAQ */}
-      {faqs?.length ? (
-        <section className="mt-12">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Frequently Asked Questions</h2>
-          <div className="space-y-6">
-            {faqs.map((faq, i) => (
-              <div key={i}>
-                <h3 className="font-medium text-foreground">{faq.question}</h3>
-                <p className="mt-1 text-muted-foreground">{faq.answer}</p>
+      {/* Stats */}
+      {stats?.length ? (
+        <section className="border-b">
+          <div className="mx-auto grid max-w-5xl gap-px bg-border sm:grid-cols-3">
+            {stats.map((stat, i) => (
+              <div key={i} className="bg-background px-6 py-8 text-center">
+                <div className="text-3xl font-bold tracking-tight text-foreground">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
               </div>
             ))}
           </div>
         </section>
       ) : null}
 
+      {/* CTA Band */}
+      <section className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-4 py-12 text-center sm:px-6">
+          <h2 className="text-xl font-semibold text-foreground">Ready to explore the data?</h2>
+          <Button size="lg" variant="default" asChild className="gap-2">
+            <a href="mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request">
+              <Mail className="h-4 w-4" />
+              Request Access
+            </a>
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            Contact: <a href="mailto:arif@gasilov.com" className="underline hover:text-foreground">arif@gasilov.com</a>
+          </p>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      {faqs?.length ? (
+        <section className="border-t">
+          <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+            <h2 className="mb-6 text-xl font-semibold text-foreground">Frequently Asked Questions</h2>
+            <Accordion type="single" collapsible className="w-full">
+              {faqs.map((faq, i) => (
+                <AccordionItem key={i} value={`faq-${i}`}>
+                  <AccordionTrigger className="text-left text-foreground">
+                    {faq.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground">
+                    {faq.answer}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+      ) : null}
+
       {/* Related */}
-      <nav className="mt-12 border-t pt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Related</h2>
-        <ul className="space-y-2">
-          {relatedLinks.map(link => (
-            <li key={link.to}>
-              <Link to={link.to} className="text-primary underline hover:text-primary/80">{link.label}</Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <section className="border-t">
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Related</h2>
+          <div className="flex flex-wrap gap-3">
+            {relatedLinks.map(link => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="rounded-lg border bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="mt-8 border-t pt-6 flex gap-4 text-sm text-muted-foreground">
-        <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
-        <span>•</span>
-        <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>
+      <footer className="border-t">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-6 text-sm text-muted-foreground sm:px-6">
+          <span>© OutlierGov</span>
+          <div className="flex gap-4">
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/terms" className="hover:text-foreground">Terms</Link>
+          </div>
+        </div>
       </footer>
     </div>
   );
