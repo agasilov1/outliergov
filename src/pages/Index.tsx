@@ -15,6 +15,25 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'OutlierGov',
+      url: window.location.origin,
+      logo: window.location.origin + '/assets/OutlierGOV-logo.png',
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: 'arif@gasilov.com',
+        contactType: 'sales',
+      },
+    });
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
