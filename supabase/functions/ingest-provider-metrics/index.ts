@@ -390,15 +390,16 @@ Deno.serve(async (req) => {
         }));
 
       if (metricsInserts.length > 0) {
-        // Use raw SQL for proper ON CONFLICT DO UPDATE
-        const { data: upsertResult, error: metricsError } = await supabase.rpc(
-          "batch_upsert_metrics",
-          { metrics_json: JSON.stringify(metricsInserts) }
-        ).maybeSingle();
+        // Batch upsert using Supabase client
+        const { error: metricsError } = await supabase
+          .from("provider_yearly_metrics")
+          .upsert(metricsInserts, {
+            onConflict: "provider_id,year",
+          });
 
-        // If the RPC doesn't exist, fall back to individual upserts
-        if (metricsError?.message?.includes("function") || metricsError?.code === "42883") {
-          // Fallback: use upsert with update
+        if (metricsError) {
+          console.error(`[Ingest] Metrics batch error: ${metricsError.message}`);
+          // Fallback to individual upserts
           for (const metric of metricsInserts) {
             const { error: singleError } = await supabase
               .from("provider_yearly_metrics")
@@ -413,9 +414,6 @@ Deno.serve(async (req) => {
               fileMetricsInserted++;
             }
           }
-        } else if (metricsError) {
-          console.error(`[Ingest] Metrics batch error: ${metricsError.message}`);
-          fileRowsSkipped += metricsInserts.length;
         } else {
           fileMetricsInserted += metricsInserts.length;
         }

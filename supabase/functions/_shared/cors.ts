@@ -20,7 +20,7 @@ export function getCorsHeaders(requestOrigin: string | null): Record<string, str
 
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-ingest-token',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-ingest-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   };
