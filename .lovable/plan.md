@@ -1,90 +1,36 @@
 
 
-## Plan: Redesign SEO Landing Pages and Homepage with Modern Visual Styling
+## Database Triggers & Functions Audit — Confirmed
 
-### Problem
-The pages are walls of plain text with zero visual hierarchy, no spacing rhythm, no cards, no icons, no color accents. They look like unstyled HTML from the 90s.
+The previous finding is **confirmed**: there are zero triggers in the database. Two functions (`handle_new_user` and `update_updated_at_column`) are orphaned.
 
-### Design Approach
-Professional SaaS-style landing pages: hero sections with gradient backgrounds, stat callout cards, icon-accented feature sections, proper whitespace, and visual rhythm. Keep it clean and authoritative (legal/gov audience) but visually engaging.
+## Edge Function Audit
 
-### Changes
+| Function | Issue | Severity | Details |
+|---|---|---|---|
+| **create-user** | Profile update assumes trigger created row | **High** | Line 164: does `.update()` on profiles for the new user, but comments say "profile trigger should have created basic profile" (line 176). Since `handle_new_user` trigger is NOT wired, the profile row doesn't exist. The `.update()` silently matches zero rows — no profile is created. User ends up with a role but no profile row. |
+| **create-user** | `listUsers()` fetches ALL users to check duplicates | **Medium** | Line 130: `listUsers()` returns max 1000 users by default. If >1000 users exist, duplicate check may miss existing users, allowing double-creation. |
+| **generate-invite** | Same `listUsers()` pagination issue | **Medium** | Line 96: same pattern — `listUsers()` to check if user exists. Will miss users beyond the 1000 default limit. |
+| **ingest-provider-metrics** | References non-existent RPC `batch_upsert_metrics` | **Medium** | Line 394: calls `supabase.rpc('batch_upsert_metrics', ...)`. This function does not exist in the database. The code has a fallback (line 400) that catches the "function not found" error and falls back to individual upserts, so it works but is wasteful — every batch triggers an error + N individual queries instead of 1. |
+| **ingest-provider-metrics** | `audit_log` insert missing `user_id` | **Low** | Line 484: inserts into `audit_log` without `user_id` field. The column is nullable so it won't fail, but the RLS policy `auth.uid() = user_id` on INSERT means this insert will be rejected by RLS. However, since the function uses the service role key, RLS is bypassed — so functionally OK but semantically inconsistent. |
+| **accept-invite** | No auth required — public endpoint | **Low** | The function accepts POST with a token in the body and has no Authorization header check. This is by design (invite acceptance is pre-auth), but the token is the only guard. Token is 32 random bytes (hex), so brute force is infeasible. Acceptable. |
+| **CORS (all functions)** | Missing `x-supabase-client-platform` headers | **Medium** | The shared `cors.ts` allows headers: `authorization, x-client-info, apikey, content-type, x-ingest-token`. Missing: `x-supabase-client-platform`, `x-supabase-client-platform-version`, `x-supabase-client-runtime`, `x-supabase-client-runtime-version`. The Supabase JS client sends these headers automatically. If the browser enforces preflight strictly, requests from the Supabase client could be blocked. |
+| **delete-user** | Admin check uses user's own RLS-scoped client | **Low** | Line 51: queries `user_roles` using `userClient` (anon key + user JWT). The RLS policy on `user_roles` allows users to view their own roles, so this works. But if the RLS policy changed, this would break. Other functions use `has_role` RPC via admin client — more robust. |
+| **batch-upsert-registry** | No CORS handling | **Info** | By design — comment says "NO CORS - this endpoint is not for browser use". Correct for server-to-server ingestion endpoints. |
+| **batch-upsert-provider-year** | No CORS handling | **Info** | Same as above — by design for server-to-server use. |
+| **seed-synthetic-data** | Inserts into `provider_yearly_metrics` (old schema) with wrong columns | **Medium** | Line 376: inserts `dataset_release_id` into `provider_yearly_metrics`, but the actual table schema for `provider_year_metrics` (note: different table name) has columns like `npi`, `tot_benes`, `tot_allowed_cents` etc. The function targets `provider_yearly_metrics` which has `provider_id` and `dataset_release_id` — this is correct for that table. No mismatch. |
 
-**`src/components/SEOLandingPage.tsx`** — Full visual overhaul of the shared layout:
-- **Sticky header**: Full-width header with logo + nav, subtle border-bottom, proper padding
-- **Hero section**: Large H1 with a subtle gradient background band, introductory paragraph in larger text
-- **Content sections**: Children rendered inside styled cards with left-accent borders for H2 sections
-- **Stat callouts**: Add a slot for highlight numbers (e.g., "1.2M providers", "2,200 outliers", "50 states")
-- **FAQ section**: Styled as an accordion or cards with subtle backgrounds instead of flat text
-- **CTA section**: Full-width gradient band with centered button, not a lonely button at the bottom
-- **Footer**: Clean horizontal layout with proper spacing
+### Summary of Action Items
 
-**`src/pages/MedicareBillingOutlierAnalysis.tsx`** — Add visual elements:
-- Add a `stats` array: `[{value: "1.2M", label: "Providers Screened"}, {value: "Top 0.5%", label: "Threshold"}, {value: "2,200", label: "Flagged Providers"}]`
-- Pass stats to SEOLandingPage as a prop
-- Wrap content paragraphs in proper section containers
+**Must fix (High):**
+1. **Wire `handle_new_user` trigger** to `auth.users` AFTER INSERT, OR change `create-user` to do `.upsert()` instead of `.update()` on profiles so the row is created if missing.
 
-**`src/pages/QuiTamResearchTools.tsx`** — Same treatment:
-- Stats: e.g., "4 Stages Supported", "50 States", "Public Data"
-- Proper section structure
+**Should fix (Medium):**
+2. **CORS headers**: Add `x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version` to the shared `cors.ts` `Access-Control-Allow-Headers`.
+3. **`listUsers()` pagination**: In `create-user` and `generate-invite`, use `getUserByEmail()` or paginate instead of `listUsers()` which caps at 1000.
+4. **`ingest-provider-metrics`**: Remove the dead `batch_upsert_metrics` RPC call and just use the fallback upsert logic directly, avoiding the wasted error/retry on every batch.
 
-**`src/pages/HealthcareFraudDataAttorneys.tsx`** — Same treatment:
-- Stats: "3.7M Records", "50 States", "PDF Export"
-
-**`src/pages/Index.tsx`** — Homepage polish:
-- Hero section with gradient background behind the logo/title area
-- Navigation cards get icons (Search, Scale, FileText from lucide), more padding, hover shadows
-- Better vertical rhythm and spacing
-- CTA buttons in a row on desktop instead of stacked
-
-### Visual Structure for Each SEO Page
-
-```text
-┌──────────────────────────────────────────────┐
-│ [Logo] OutlierGov    Home | Medicare | ...   │  ← sticky header
-├──────────────────────────────────────────────┤
-│                                              │
-│  ░░░░░░ gradient background ░░░░░░░░░░░░░░░  │
-│     H1: Medicare Billing Outlier Analysis    │
-│     Intro paragraph in larger text           │
-│                                              │
-│  ┌────────┐  ┌────────┐  ┌────────┐          │
-│  │ 1.2M   │  │Top 0.5%│  │ 2,200  │          │  ← stat cards
-│  │Screened│  │Threshold│  │Flagged │          │
-│  └────────┘  └────────┘  └────────┘          │
-│                                              │
-│  ┌─ How Peer Normalization Works ──────────┐ │
-│  │ accent border   paragraph text...       │ │  ← content cards
-│  └─────────────────────────────────────────┘ │
-│                                              │
-│  ┌─ Data Source and Methodology ───────────┐ │
-│  │ accent border   paragraph text...       │ │
-│  └─────────────────────────────────────────┘ │
-│                                              │
-│  ░░░░░ CTA gradient band ░░░░░░░░░░░░░░░░░  │
-│       [Request Access]                       │
-│       arif@gasilov.com                       │
-│                                              │
-│  FAQ (styled cards)                          │
-│  Related links                               │
-│  Footer                                     │
-└──────────────────────────────────────────────┘
-```
-
-### Technical Details
-- Use existing design system colors: `--primary`, `--accent`, `--muted`, `--card`
-- Gradient backgrounds use Tailwind's `bg-gradient-to-br from-primary/5 to-accent/5`
-- Stat cards use the existing Card components from `ui/card.tsx`
-- FAQ items styled as bordered cards with padding
-- Nav gets `sticky top-0 z-50 bg-background/95 backdrop-blur` for scroll behavior
-- Add `stats` prop to `SEOLandingPageProps` as `{value: string, label: string}[]`
-- Icons from lucide-react for homepage cards (Search, Scale, FileText)
-- All changes are CSS/layout only — no new dependencies
-
-### Files Modified
-- `src/components/SEOLandingPage.tsx` — major visual redesign
-- `src/pages/MedicareBillingOutlierAnalysis.tsx` — add stats, restructure content
-- `src/pages/QuiTamResearchTools.tsx` — add stats, restructure content
-- `src/pages/HealthcareFraudDataAttorneys.tsx` — add stats, restructure content
-- `src/pages/Index.tsx` — polish homepage with gradient hero, card icons, better layout
+**Nice to fix (Low):**
+5. Wire `update_updated_at_column` trigger to `profiles` and `firms` tables.
+6. Standardize admin role check pattern across all functions (use `has_role` RPC consistently).
 
