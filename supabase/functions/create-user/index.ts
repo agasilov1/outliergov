@@ -161,20 +161,19 @@ Deno.serve(async (req) => {
 
     console.log('User created successfully:', newUser.user.id);
 
-    // Update the profile with additional fields
+    // Upsert profile to handle both cases: trigger-created row or missing row
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({
+      .upsert({
+        id: newUser.user.id,
         email,
         full_name: full_name || null,
         firm_id: firm_id || null,
         must_change_password: true
-      })
-      .eq('id', newUser.user.id);
+      }, { onConflict: 'id' });
 
     if (profileError) {
-      console.error('Error updating profile:', profileError);
-      // Don't fail the whole operation, profile trigger should have created basic profile
+      console.error('Error upserting profile:', profileError);
     }
 
     // Assign role to user_roles table

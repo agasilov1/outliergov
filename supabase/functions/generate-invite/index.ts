@@ -89,10 +89,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(u => u.email === email);
-    if (existingUser) {
+    // Check if user already exists (using targeted lookup instead of listUsers pagination)
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
+      filter: { email }
+    });
+    if (existingUsers?.users?.length > 0) {
       return new Response(
         JSON.stringify({ error: 'A user with this email already exists' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
