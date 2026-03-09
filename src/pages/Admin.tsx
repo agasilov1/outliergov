@@ -196,12 +196,25 @@ export default function Admin() {
       });
       
       if (error) {
-        // supabase.functions.invoke returns error body as FunctionsHttpError
         let msg = 'Failed to create user';
+        console.error('create-user invoke error:', error);
         try {
-          const body = error instanceof Error && 'context' in error ? await (error as any).context.json() : null;
-          if (body?.error) msg = body.error;
-        } catch { /* use default */ }
+          if (error && typeof error === 'object' && 'context' in error) {
+            const ctx = (error as any).context;
+            if (ctx instanceof Response) {
+              const body = await ctx.json();
+              if (body?.error) msg = body.error;
+            } else if (typeof ctx === 'object' && ctx?.error) {
+              msg = ctx.error;
+            }
+          } else if (error instanceof Error) {
+            msg = error.message;
+          }
+        } catch {
+          if (error instanceof Error && error.message && error.message !== 'FunctionsHttpError') {
+            msg = error.message;
+          }
+        }
         throw new Error(msg);
       }
       if (data?.error) throw new Error(data.error);
