@@ -130,7 +130,7 @@ export default function SEOLandingPage({ children, title, description, path, her
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-4 py-12 text-center sm:px-6">
           <h2 className="text-xl font-semibold text-foreground">Ready to explore the data?</h2>
           <Button size="lg" variant="default" asChild className="gap-2">
-            <a href="mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request">
+            <a href="mailto:arif@outliergov.com?subject=OutlierGov%20Access%20Request">
               <Mail className="h-4 w-4" />
               Request Access
             </a>
