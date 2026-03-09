@@ -234,9 +234,9 @@ export default function Admin() {
       
       toast.success('User created successfully!');
       loadData();
-    } catch (err) {
-      console.error('Error creating user:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to create user');
+    } catch (err: any) {
+      console.error('Create user full error:', err);
+      toast.error(err?.message || 'Failed to create user');
     } finally {
       setCreateUserLoading(false);
     }
