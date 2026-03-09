@@ -47,7 +47,7 @@ const Index = () => {
       logo: window.location.origin + '/assets/OutlierGOV-logo.png',
       contactPoint: {
         '@type': 'ContactPoint',
-        email: 'arif@gasilov.com',
+        email: 'arif@outliergov.com',
         contactType: 'sales',
       },
     });
