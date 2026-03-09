@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,42 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [mustChangePassword, setMustChangePassword] = useState(false);
-
-  useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Defer role and profile fetching to avoid deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUserRoles(session.user.id);
-            fetchMustChangePassword(session.user.id);
-          }, 0);
-        } else {
-          setRoles([]);
-          setMustChangePassword(false);
-        }
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRoles(session.user.id);
-        fetchMustChangePassword(session.user.id);
-      }
-      
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const isMounted = useRef(true);
 
   async function fetchUserRoles(userId: string) {
     try {
@@ -72,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!isMounted.current) return;
       const userRoles = data?.map(r => r.role as AppRole) || [];
       setRoles(userRoles);
     } catch (err) {
@@ -92,11 +58,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!isMounted.current) return;
       setMustChangePassword(data?.must_change_password === true);
     } catch (err) {
       console.error('Error fetching must_change_password:', err);
     }
   }
+
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!isMounted.current) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Defer role and profile fetching to avoid deadlock
+        if (session?.user) {
+          setTimeout(() => {
+            fetchUserRoles(session.user.id);
+            fetchMustChangePassword(session.user.id);
+          }, 0);
+        } else {
+          setRoles([]);
+          setMustChangePassword(false);
+        }
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isMounted.current) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await fetchUserRoles(session.user.id);
+        await fetchMustChangePassword(session.user.id);
+      }
+      
+      if (isMounted.current) setLoading(false);
+    });
+
+    return () => {
+      isMounted.current = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   function clearMustChangePassword() {
     setMustChangePassword(false);

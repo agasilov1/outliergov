@@ -25,7 +25,15 @@ export function useWatchlist() {
   const toggleMutation = useMutation({
     mutationFn: async (npi: string) => {
       if (!user) throw new Error('Not authenticated');
-      if (watchlistSet.has(npi)) {
+      // Query fresh state instead of using stale watchlistSet
+      const { data: existing } = await supabase
+        .from('watchlist_items')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('npi', npi)
+        .maybeSingle();
+
+      if (existing) {
         const { error } = await supabase
           .from('watchlist_items')
           .delete()
