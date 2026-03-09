@@ -195,7 +195,16 @@ export default function Admin() {
         }
       });
       
-      if (error || data?.error) throw new Error(data?.error || 'Failed to create user');
+      if (error) {
+        // supabase.functions.invoke returns error body as FunctionsHttpError
+        let msg = 'Failed to create user';
+        try {
+          const body = error instanceof Error && 'context' in error ? await (error as any).context.json() : null;
+          if (body?.error) msg = body.error;
+        } catch { /* use default */ }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
       
       // Show password modal
       setGeneratedPassword(data.generated_password);

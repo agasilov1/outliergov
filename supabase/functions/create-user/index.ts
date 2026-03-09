@@ -126,17 +126,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user already exists (using targeted lookup instead of listUsers pagination)
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers({
-      filter: { email }
-    });
-    if (existingUsers?.users?.length > 0) {
-      return new Response(
-        JSON.stringify({ error: 'A user with this email already exists' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Generate strong password - DO NOT LOG THE PASSWORD
     const generatedPassword = generateStrongPassword();
     console.log('Creating user with temporary password:', email);
@@ -153,9 +142,11 @@ Deno.serve(async (req) => {
 
     if (createError || !newUser.user) {
       console.error('Error creating user:', createError);
+      const isDuplicate = createError?.message?.includes('already been registered') || 
+                          createError?.message?.includes('already exists');
       return new Response(
-        JSON.stringify({ error: createError?.message || 'Failed to create user' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: isDuplicate ? 'A user with this email already exists' : (createError?.message || 'Failed to create user') }),
+        { status: isDuplicate ? 400 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
