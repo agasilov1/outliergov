@@ -142,9 +142,11 @@ Deno.serve(async (req) => {
 
     if (createError || !newUser.user) {
       console.error('Error creating user:', createError);
+      const isDuplicate = createError?.message?.includes('already been registered') || 
+                          createError?.message?.includes('already exists');
       return new Response(
-        JSON.stringify({ error: createError?.message || 'Failed to create user' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: isDuplicate ? 'A user with this email already exists' : (createError?.message || 'Failed to create user') }),
+        { status: isDuplicate ? 400 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
