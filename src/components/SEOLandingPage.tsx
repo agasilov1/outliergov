@@ -136,7 +136,7 @@ export default function SEOLandingPage({ children, title, description, path, her
             </a>
           </Button>
           <p className="text-sm text-muted-foreground">
-            Contact: <a href="mailto:arif@gasilov.com" className="underline hover:text-foreground">arif@gasilov.com</a>
+            Contact: <a href="mailto:arif@outliergov.com" className="underline hover:text-foreground">arif@outliergov.com</a>
           </p>
         </div>
       </section>

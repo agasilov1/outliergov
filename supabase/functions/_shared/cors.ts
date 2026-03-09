@@ -3,6 +3,9 @@
 const ALLOWED_ORIGINS = [
   // Production
   'https://outliergov.lovable.app',
+  // Custom domain
+  'https://outliergov.com',
+  'https://www.outliergov.com',
   // Preview
   'https://id-preview--0fa4c705-4ab4-400f-af92-ba03453bf019.lovable.app',
   // Legacy (if still in use)

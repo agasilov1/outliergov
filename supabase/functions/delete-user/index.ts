@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
 
     // Protect specific email (server-side enforcement)
     const { data: targetUser } = await adminClient.auth.admin.getUserById(user_id);
-    const protectedEmails = ['arifgasilov123@gmail.com'];
+    const protectedEmails = ['arif@outliergov.com'];
     if (targetUser?.user?.email && 
         protectedEmails.includes(targetUser.user.email.toLowerCase())) {
       return new Response(
