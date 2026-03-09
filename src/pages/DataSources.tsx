@@ -26,7 +26,7 @@ export default function DataSources() {
           <p className="text-muted-foreground">
             The Medicare Provider Utilization and Payment Data contains information on services 
             and procedures provided to Medicare beneficiaries by physicians and other healthcare 
-            professionals. The data includes:
+            professionals. The fields ingested for analysis include:
           </p>
 
           <ul className="space-y-2 text-muted-foreground">
@@ -36,7 +36,7 @@ export default function DataSources() {
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Provider name, credentials, and specialty
+              Provider name, credentials, entity type, and specialty
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
@@ -45,6 +45,22 @@ export default function DataSources() {
             <li className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
               Total services, beneficiaries, and allowed amounts
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              Drug and medical allowed amounts (used to compute the drug/medical cost split)
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              Beneficiary average HCC risk score
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              Beneficiary average age
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              Total distinct HCPCS codes billed
             </li>
           </ul>
 
@@ -81,7 +97,10 @@ export default function DataSources() {
             <p className="text-sm text-muted-foreground">
               Provider-level data is aggregated by NPI, summing total allowed amounts 
               across all procedures for each calendar year. We compute allowed per beneficiary 
-              using provider totals (Tot_Mdcr_Alowd_Amt / Tot_Benes).
+              using provider totals (Tot_Mdcr_Alowd_Amt / Tot_Benes). Drug and medical allowed 
+              amounts are stored separately to support the drug/medical cost split metric (drug_pct), 
+              and supplemental fields (beneficiary average risk score, beneficiary average age, total 
+              HCPCS codes billed) are carried through for contextual analysis on provider profiles.
             </p>
           </div>
 
