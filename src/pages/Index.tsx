@@ -47,7 +47,7 @@ const Index = () => {
       logo: window.location.origin + '/assets/OutlierGOV-logo.png',
       contactPoint: {
         '@type': 'ContactPoint',
-        email: 'arif@gasilov.com',
+        email: 'arif@outliergov.com',
         contactType: 'sales',
       },
     });
@@ -107,14 +107,14 @@ const Index = () => {
             <ArrowRight className="h-4 w-4" />
           </Button>
           <Button size="lg" variant="outline" asChild className="gap-2">
-            <a href="mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request">
+            <a href="mailto:arif@outliergov.com?subject=OutlierGov%20Access%20Request">
               <Mail className="h-4 w-4" />
               Request Access
             </a>
           </Button>
         </div>
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Contact: <a href="mailto:arif@gasilov.com" className="underline hover:text-foreground">arif@gasilov.com</a>
+          Contact: <a href="mailto:arif@outliergov.com" className="underline hover:text-foreground">arif@outliergov.com</a>
         </p>
       </section>
 

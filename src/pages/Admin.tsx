@@ -65,7 +65,7 @@ interface AuditLogEntry {
   user_firm_name?: string | null;
 }
 
-const PROTECTED_ADMIN_EMAIL = 'arifgasilov123@gmail.com';
+const PROTECTED_ADMIN_EMAIL = 'arif@outliergov.com';
 
 export default function Admin() {
   const { user, session } = useAuth();
