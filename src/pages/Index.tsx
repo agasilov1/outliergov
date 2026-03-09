@@ -107,7 +107,7 @@ const Index = () => {
             <ArrowRight className="h-4 w-4" />
           </Button>
           <Button size="lg" variant="outline" asChild className="gap-2">
-            <a href="mailto:arif@gasilov.com?subject=OutlierGov%20Access%20Request">
+            <a href="mailto:arif@outliergov.com?subject=OutlierGov%20Access%20Request">
               <Mail className="h-4 w-4" />
               Request Access
             </a>
