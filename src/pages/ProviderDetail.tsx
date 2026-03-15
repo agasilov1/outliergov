@@ -456,7 +456,7 @@ export default function ProviderDetail() {
     <div className="space-y-6 print-container">
       {/* Print-only disclaimer banner */}
       <div className="hidden print:block print-disclaimer">
-        Statistical analysis only • Not a finding of fraud or wrongdoing • Data Source: CMS Medicare Part B • For internal screening use only
+        Statistical analysis only • Not a finding of fraud or wrongdoing • Data Source: CMS Medicare Part B
       </div>
       {/* Header with back button and search */}
       <div className="flex items-center justify-between gap-4 no-print">
@@ -962,8 +962,7 @@ export default function ProviderDetail() {
       <div className="text-center text-xs text-muted-foreground py-4 border-t mt-6 space-y-1">
         <p>Statistical analysis • Public data • Not a finding of wrongdoing</p>
         <p className="text-muted-foreground/70">
-          Outputs are for internal analysis and screening only and may not be publicly 
-          distributed or presented as factual findings.
+          Outputs may be freely shared with disclaimers preserved.
         </p>
       </div>
     </div>
