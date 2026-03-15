@@ -43,3 +43,6 @@ verify_jwt = false
 
 [functions.delete-firm-with-users]
 verify_jwt = false
+
+[functions.generate-provider-summary]
+verify_jwt = false
