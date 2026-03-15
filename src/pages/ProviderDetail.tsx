@@ -475,17 +475,19 @@ export default function ProviderDetail() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {/* Watchlist button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => npi && toggleWatchlist(npi)}
-                disabled={isToggling}
-                className="no-print"
-              >
-                <Star className={`mr-2 h-4 w-4 ${npi && watchlistSet.has(npi) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                {npi && watchlistSet.has(npi) ? 'Watching' : 'Watch'}
-              </Button>
+              {/* Watchlist button - only when logged in */}
+              {user && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => npi && toggleWatchlist(npi)}
+                  disabled={isToggling}
+                  className="no-print"
+                >
+                  <Star className={`mr-2 h-4 w-4 ${npi && watchlistSet.has(npi) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  {npi && watchlistSet.has(npi) ? 'Watching' : 'Watch'}
+                </Button>
+              )}
               {/* Export buttons */}
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="no-print">
                 <Download className="mr-2 h-4 w-4" />

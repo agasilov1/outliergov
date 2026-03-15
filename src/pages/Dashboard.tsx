@@ -2,7 +2,7 @@ import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -359,34 +359,36 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* User info card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Welcome back
-            {isAdmin && (
-              <Badge variant="secondary" className="bg-accent text-accent-foreground">
-                Admin
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription>{user?.email}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Roles:</span>
-            {roles.length > 0 ? (
-              roles.map((role) => (
-                <Badge key={role} variant="outline">
-                  {role}
+      {/* User info card - only when logged in */}
+      {user && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Welcome back
+              {isAdmin && (
+                <Badge variant="secondary" className="bg-accent text-accent-foreground">
+                  Admin
                 </Badge>
-              ))
-            ) : (
-              <Badge variant="outline">No roles assigned</Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </CardTitle>
+            <CardDescription>{user.email}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Roles:</span>
+              {roles.length > 0 ? (
+                roles.map((role) => (
+                  <Badge key={role} variant="outline">
+                    {role}
+                  </Badge>
+                ))
+              ) : (
+                <Badge variant="outline">No roles assigned</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats overview */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -503,20 +505,26 @@ export default function Dashboard() {
 
           {/* Watchlist toggle + filter persistence */}
           <div className="flex flex-wrap items-center gap-4 mt-2">
-            <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
-              <Switch
-                id="watchlist-only"
-                checked={watchlistOnly}
-                onCheckedChange={(val) => updateFilters({ watchlist: val ? 'true' : null })}
-              />
-              <Label htmlFor="watchlist-only" className="text-sm cursor-pointer flex items-center gap-1">
-                <Star className="h-3.5 w-3.5" />
-                My Watchlist
-              </Label>
-              {watchlistSet.size > 0 && (
-                <Badge variant="secondary" className="text-xs">{watchlistSet.size}</Badge>
-              )}
-            </div>
+            {user ? (
+              <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+                <Switch
+                  id="watchlist-only"
+                  checked={watchlistOnly}
+                  onCheckedChange={(val) => updateFilters({ watchlist: val ? 'true' : null })}
+                />
+                <Label htmlFor="watchlist-only" className="text-sm cursor-pointer flex items-center gap-1">
+                  <Star className="h-3.5 w-3.5" />
+                  My Watchlist
+                </Label>
+                {watchlistSet.size > 0 && (
+                  <Badge variant="secondary" className="text-xs">{watchlistSet.size}</Badge>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                <Link to="/auth" className="text-primary underline hover:text-primary/80">Sign in</Link> to save watchlists and export reports
+              </div>
+            )}
 
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={handleSaveAsDefault}>
@@ -612,14 +620,18 @@ export default function Dashboard() {
                         >
                           {/* Star / Watchlist */}
                           <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => toggleWatchlist(provider.npi)}
-                              disabled={isToggling}
-                              className="p-1 rounded hover:bg-muted"
-                              aria-label={isStarred ? 'Remove from watchlist' : 'Add to watchlist'}
-                            >
-                              <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
-                            </button>
+                            {user ? (
+                              <button
+                                onClick={() => toggleWatchlist(provider.npi)}
+                                disabled={isToggling}
+                                className="p-1 rounded hover:bg-muted"
+                                aria-label={isStarred ? 'Remove from watchlist' : 'Add to watchlist'}
+                              >
+                                <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                              </button>
+                            ) : (
+                              <Star className="h-4 w-4 text-muted-foreground/30" />
+                            )}
                           </TableCell>
                           {/* Compare checkbox */}
                           <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>

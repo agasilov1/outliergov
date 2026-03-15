@@ -42,41 +42,33 @@ const App = () => (
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <Dashboard />
-                  </AppLayout>
-                </ProtectedRoute>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
               }
             />
             <Route
               path="/provider/:id"
               element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ProviderDetail />
-                  </AppLayout>
-                </ProtectedRoute>
+                <AppLayout>
+                  <ProviderDetail />
+                </AppLayout>
               }
             />
             <Route
               path="/methodology"
               element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <Methodology />
-                  </AppLayout>
-                </ProtectedRoute>
+                <AppLayout>
+                  <Methodology />
+                </AppLayout>
               }
             />
             <Route
               path="/data-sources"
               element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <DataSources />
-                  </AppLayout>
-                </ProtectedRoute>
+                <AppLayout>
+                  <DataSources />
+                </AppLayout>
               }
             />
             <Route
@@ -92,11 +84,9 @@ const App = () => (
           <Route
             path="/compare"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <ProviderCompare />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <ProviderCompare />
+              </AppLayout>
             }
           />
           <Route path="/medicare-billing-outlier-analysis" element={<MedicareBillingOutlierAnalysis />} />

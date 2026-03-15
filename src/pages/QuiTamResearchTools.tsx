@@ -40,8 +40,9 @@ export default function QuiTamResearchTools() {
         Public Accountability Research Tools
       </h1>
       <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-        OutlierGov helps researchers, journalists, policymakers, and the public screen and analyze
-        Medicare provider billing patterns using transparent, reproducible statistical methods.
+        OutlierGov is a free, open-source tool that helps researchers, journalists, policymakers, and the
+        public screen and analyze Medicare provider billing patterns using transparent, reproducible
+        statistical methods.
       </p>
 
       <div className="mt-10 space-y-6">

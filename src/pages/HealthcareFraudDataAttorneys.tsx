@@ -40,9 +40,9 @@ export default function HealthcareFraudDataAttorneys() {
         Medicare Outlier Registry
       </h1>
       <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-        OutlierGov gives researchers, journalists, policymakers, and the public access to a structured,
-        searchable registry of Medicare providers whose billing patterns are statistical outliers relative
-        to their specialty and state peers.
+        OutlierGov is a free, open-source tool that gives researchers, journalists, policymakers, and the
+        public access to a structured, searchable registry of Medicare providers whose billing patterns are
+        statistical outliers relative to their specialty and state peers.
       </p>
 
       <div className="mt-10 space-y-6">

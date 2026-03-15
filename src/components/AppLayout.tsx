@@ -74,7 +74,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               );
             })}
 
-            {isAdmin && (
+            {user && isAdmin && (
               <>
                 <div className="my-4 border-t border-sidebar-border" />
                 {adminNavigation.map((item) => {
@@ -101,18 +101,34 @@ export function AppLayout({ children }: AppLayoutProps) {
           </nav>
 
           <div className="border-t border-sidebar-border p-4">
-            <div className="mb-3 truncate text-sm text-sidebar-foreground/70">
-              {user?.email}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={signOut}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+            {user ? (
+              <>
+                <div className="mb-3 truncate text-sm text-sidebar-foreground/70">
+                  {user.email}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={signOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                asChild
+              >
+                <Link to="/auth">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign in
+                </Link>
+              </Button>
+            )}
           </div>
         </aside>
 
@@ -127,9 +143,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               />
               <span className="text-lg font-semibold">OutlierGov</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              <LogOut className="h-4 w-4" />
-            </Button>
+            {user ? (
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            )}
           </header>
 
           {/* Mobile navigation */}
@@ -152,7 +174,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </Link>
               );
             })}
-            {isAdmin && adminNavigation.map((item) => {
+            {user && isAdmin && adminNavigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link
