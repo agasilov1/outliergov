@@ -100,8 +100,8 @@ const App = () => (
             }
           />
           <Route path="/medicare-billing-outlier-analysis" element={<MedicareBillingOutlierAnalysis />} />
-          <Route path="/qui-tam-research-tools" element={<QuiTamResearchTools />} />
-          <Route path="/healthcare-fraud-data-attorneys" element={<HealthcareFraudDataAttorneys />} />
+          <Route path="/accountability-research-tools" element={<QuiTamResearchTools />} />
+          <Route path="/provider-registry" element={<HealthcareFraudDataAttorneys />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

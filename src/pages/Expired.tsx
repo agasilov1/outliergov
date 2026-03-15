@@ -48,10 +48,10 @@ export default function Expired() {
               <span className="text-sm text-muted-foreground">Contact us at:</span>
             </div>
             <a 
-              href="mailto:info@gasilov.com" 
+              href="mailto:arif@outliergov.com" 
               className="text-primary font-medium hover:underline"
             >
-              info@gasilov.com
+              arif@outliergov.com
             </a>
           </div>
 

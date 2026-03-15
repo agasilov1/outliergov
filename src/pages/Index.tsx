@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, Loader2, Mail, Search, Scale, FileText } from 'lucide-react';
+import { ArrowRight, Loader2, Search, Scale, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
@@ -13,14 +13,14 @@ const navCards = [
     icon: Search,
   },
   {
-    to: '/qui-tam-research-tools',
-    title: 'Qui Tam Research Tools',
-    desc: 'Screen and prioritize False Claims Act cases.',
+    to: '/accountability-research-tools',
+    title: 'Public Accountability Research',
+    desc: 'Tools for researchers, journalists, and policymakers.',
     icon: Scale,
   },
   {
-    to: '/healthcare-fraud-data-attorneys',
-    title: 'Healthcare Fraud Data for Attorneys',
+    to: '/provider-registry',
+    title: 'Medicare Outlier Registry',
     desc: 'Searchable registry of Medicare billing outliers.',
     icon: FileText,
   },
@@ -48,7 +48,7 @@ const Index = () => {
       contactPoint: {
         '@type': 'ContactPoint',
         email: 'arif@outliergov.com',
-        contactType: 'sales',
+        contactType: 'customer service',
       },
     });
     document.head.appendChild(script);
@@ -76,8 +76,9 @@ const Index = () => {
             </div>
           </div>
           <p className="max-w-2xl text-xl leading-relaxed text-muted-foreground">
-            OutlierGov identifies providers whose Medicare allowed amount per beneficiary
-            is persistently extreme (top 0.5%) relative to specialty and state peers, across multiple years.
+            OutlierGov is a free, open-source public accountability tool that identifies Medicare providers
+            whose allowed amount per beneficiary is persistently extreme (top 0.5%) relative to specialty
+            and state peers, across multiple years.
           </p>
         </div>
       </section>
@@ -100,22 +101,29 @@ const Index = () => {
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-4xl px-4 pb-16">
+      <section className="mx-auto max-w-4xl px-4 pb-12">
         <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button size="lg" onClick={() => navigate('/auth')} className="gap-2">
-            Sign In
+            Explore the Registry
             <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button size="lg" variant="outline" asChild className="gap-2">
-            <a href="mailto:arif@outliergov.com?subject=OutlierGov%20Access%20Request">
-              <Mail className="h-4 w-4" />
-              Request Access
-            </a>
           </Button>
         </div>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Contact: <a href="mailto:arif@outliergov.com" className="underline hover:text-foreground">arif@outliergov.com</a>
         </p>
+      </section>
+
+      {/* About */}
+      <section className="border-t">
+        <div className="mx-auto max-w-3xl px-4 py-12 text-center">
+          <h2 className="text-lg font-semibold text-foreground mb-3">About OutlierGov</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            OutlierGov was built to make Medicare spending data accessible and understandable. Using publicly
+            available CMS datasets, it applies peer-normalized statistical analysis to surface billing
+            anomalies — giving researchers, journalists, policymakers, and the public a transparent,
+            reproducible tool for public accountability. The methodology and codebase are open source.
+          </p>
+        </div>
       </section>
 
       {/* Footer */}

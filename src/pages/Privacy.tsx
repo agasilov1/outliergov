@@ -191,10 +191,10 @@ export default function Privacy() {
           <p>If you have questions about this Privacy Policy, contact us at:</p>
           <p className="mt-2">
             <a
-              href="mailto:info@gasilov.com"
+              href="mailto:arif@outliergov.com"
               className="text-primary underline hover:text-primary/80"
             >
-              info@gasilov.com
+              arif@outliergov.com
             </a>
           </p>
         </CardContent>

@@ -157,7 +157,7 @@ export default function Auth() {
         <CardHeader className="text-center">
           <CardTitle>Welcome Back</CardTitle>
           <CardDescription>
-            Sign in to access statistical anomaly analysis
+            Sign in to save watchlists, export reports, and access full provider profiles
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
