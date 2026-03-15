@@ -88,6 +88,11 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Invalidate cached AI summaries for updated providers
+    const npis = [...new Set(rows.map((r: { npi: string }) => r.npi))];
+    await supabase.from("provider_summaries").delete().in("npi", npis);
+    console.log(`Invalidated cached summaries for ${npis.length} NPIs`);
+
     return new Response(
       JSON.stringify({ upserted: rows.length }),
       { status: 200, headers: { "Content-Type": "application/json" } }
