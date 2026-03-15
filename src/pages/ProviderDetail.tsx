@@ -587,6 +587,33 @@ export default function ProviderDetail() {
         </CardContent>
       </Card>
 
+      {/* AI-Generated Summary */}
+      {aiSummary !== undefined && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-sm">AI-Generated Summary</h3>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">GPT-4o mini</Badge>
+                </div>
+                {isAiLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ) : aiError ? (
+                  <p className="text-sm text-muted-foreground italic">Summary unavailable</p>
+                ) : (
+                  <p className="text-sm leading-relaxed">{aiSummary}</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Peer Group Snapshot Panel */}
       {latestYear && latestYear.peerGroupSize && (
         <Card>
