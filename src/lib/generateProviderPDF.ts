@@ -72,7 +72,7 @@ function addFooter(doc: jsPDF, pageNum: number) {
   const y = PAGE_H - 30;
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.footerGray);
-  doc.text('© 2026 OutlierGov. All rights reserved.', MARGIN, y);
+  doc.text('© 2026 OutlierGov. MIT License.', MARGIN, y);
   doc.text('outliergov.com', PAGE_W / 2, y, { align: 'center' });
   doc.text(`Page ${pageNum} of ${TOTAL_PAGES}`, PAGE_W - MARGIN, y, { align: 'right' });
 }
