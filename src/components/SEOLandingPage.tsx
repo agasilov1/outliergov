@@ -1,15 +1,15 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Mail } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
 
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/medicare-billing-outlier-analysis', label: 'Medicare Billing' },
-  { to: '/qui-tam-research-tools', label: 'Qui Tam Tools' },
-  { to: '/healthcare-fraud-data-attorneys', label: 'Fraud Data' },
+  { to: '/accountability-research-tools', label: 'Research Tools' },
+  { to: '/provider-registry', label: 'Provider Registry' },
 ];
 
 interface FAQItem {
@@ -130,10 +130,10 @@ export default function SEOLandingPage({ children, title, description, path, her
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-4 py-12 text-center sm:px-6">
           <h2 className="text-xl font-semibold text-foreground">Ready to explore the data?</h2>
           <Button size="lg" variant="default" asChild className="gap-2">
-            <a href="mailto:arif@outliergov.com?subject=OutlierGov%20Access%20Request">
-              <Mail className="h-4 w-4" />
-              Request Access
-            </a>
+            <Link to="/auth">
+              Explore the Registry
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </Button>
           <p className="text-sm text-muted-foreground">
             Contact: <a href="mailto:arif@outliergov.com" className="underline hover:text-foreground">arif@outliergov.com</a>

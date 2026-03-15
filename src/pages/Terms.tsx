@@ -27,7 +27,7 @@ export default function Terms() {
       </div>
 
       <p className="text-muted-foreground">
-        These Terms of Service govern your access to and use of this application (the "Service").
+        These Terms of Service govern your access to and use of OutlierGov (the "Service"), a free, open-source public accountability tool.
       </p>
 
       <Card>
@@ -36,7 +36,7 @@ export default function Terms() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The Service provides statistical analyses and visualizations derived from structured datasets. The Service presents descriptive information only.
+            The Service provides statistical analyses and visualizations derived from publicly available government datasets. The Service presents descriptive information only.
           </p>
           <p>
             The Service does not make legal, factual, compliance, or investigative determinations.
@@ -46,17 +46,15 @@ export default function Terms() {
 
       <Card>
         <CardHeader>
-          <CardTitle>License Scope</CardTitle>
+          <CardTitle>License and Use</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, revocable license to access and use the Service solely for your organization's internal purposes.
+            You are free to use the Service for any lawful purpose, including but not limited to research, journalism, policy analysis, advocacy, education, and public accountability.
           </p>
-          <ul className="list-disc space-y-2 pl-6">
-            <li>You may not sublicense, assign, or transfer your access rights to any third party</li>
-            <li>Access is granted only to authorized personnel within your organization</li>
-            <li>This license may be revoked at any time for violation of these Terms</li>
-          </ul>
+          <p>
+            We reserve the right to suspend or revoke access in cases of misuse, including defamation, misrepresentation of outputs, or conduct that violates these Terms.
+          </p>
         </CardContent>
       </Card>
 
@@ -93,24 +91,9 @@ export default function Terms() {
           <p>You agree to:</p>
           <ul className="list-disc space-y-2 pl-6">
             <li>Use the Service lawfully</li>
-            <li>Not misrepresent outputs as factual findings</li>
+            <li>Not misrepresent outputs as factual findings of wrongdoing</li>
             <li>Not use the Service to harass, defame, or target individuals or entities</li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Confidentiality</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-muted-foreground">
-          <p>
-            All outputs, analyses, and information provided through the Service are confidential to your organization.
-          </p>
-          <ul className="list-disc space-y-2 pl-6">
-            <li>You may not share outputs with third parties without prior written consent from the Company</li>
-            <li>Internal distribution within your organization must preserve all applicable disclaimers</li>
-            <li>Outputs may not be used in public filings, press releases, or external communications without authorization</li>
+            <li>Preserve applicable disclaimers when sharing or citing platform outputs</li>
           </ul>
         </CardContent>
       </Card>
@@ -120,103 +103,96 @@ export default function Terms() {
           <CardTitle>Permitted Use</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
-          <p>Your access to the Service is granted solely for:</p>
+          <p>The Service is designed for broad public use, including:</p>
           <ul className="list-disc space-y-2 pl-6">
-            <li>Internal screening and research purposes</li>
-            <li>Due diligence and case intake evaluation</li>
+            <li>Academic and independent research</li>
+            <li>Journalism and investigative reporting</li>
+            <li>Policy analysis and public accountability</li>
+            <li>Education and civic engagement</li>
             <li>Comparative statistical analysis</li>
           </ul>
-          <p className="font-medium text-foreground">You may NOT:</p>
-          <ul className="list-disc space-y-2 pl-6">
-            <li>Bulk export, scrape, or systematically download data from the Service</li>
-            <li>Publicly redistribute outputs in any format (reports, datasets, summaries)</li>
-            <li>Share outputs externally without preserving all applicable disclaimers</li>
-            <li>Use outputs as standalone evidence without independent verification</li>
-            <li>Present statistical comparisons as findings of wrongdoing</li>
-          </ul>
           <p>
-            All outputs must retain the platform's disclaimers when shared internally or used in any documentation.
+            You are encouraged to share, cite, and redistribute outputs. When doing so, please preserve applicable disclaimers so that readers understand the nature and limitations of the data.
+          </p>
+          <p>
+            Please do not present statistical comparisons as findings of wrongdoing, or use outputs as standalone evidence without independent verification.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Restrictions on Use</CardTitle>
-        </CardHeader>
-        <CardContent className="text-muted-foreground">
-          <p>
-            You may not publicly represent, publish, or redistribute outputs from the Service in a manner that implies factual findings, legal conclusions, or determinations of wrongdoing. Any external use must preserve appropriate disclaimers and context.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Export Restrictions</CardTitle>
+          <CardTitle>Responsible Use of Exports</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            All exports from the Service, including but not limited to screenshots, PDFs, downloaded reports, and copied data, are subject to the same restrictions as on-platform usage.
+            All exports from the Service — including screenshots, PDFs, downloaded reports, and copied data — should preserve the platform's disclaimers and context.
           </p>
           <ul className="list-disc space-y-2 pl-6">
-            <li>All exports must retain the platform's disclaimers and context</li>
-            <li>Removal, alteration, or obscuring of disclaimers constitutes a material breach of these Terms</li>
-            <li>Exports may not be modified to misrepresent the nature of the underlying data</li>
+            <li>Users must preserve disclaimers when sharing or citing platform outputs</li>
+            <li>Exports should not be modified to misrepresent the nature of the underlying data</li>
           </ul>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Intellectual Property</CardTitle>
+          <CardTitle>Rate Limits</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
-            All content, software, and materials provided through the Service are owned by the Company or its licensors and are protected by applicable intellectual property laws.
+            To ensure fair access for all users, the Service may enforce reasonable rate limits on automated or high-volume requests. If you need bulk access to the underlying data, please contact us.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Account Suspension and Termination</CardTitle>
+          <CardTitle>Intellectual Property and Open Source</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            The OutlierGov methodology and codebase are released under the MIT License. You are free to inspect, modify, and redistribute the source code under the terms of that license.
+          </p>
+          <p>
+            The OutlierGov name, logo, and brand identity remain the property of the project maintainers. The underlying public datasets are published by government agencies and are not subject to copyright claims by OutlierGov.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Suspension</CardTitle>
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
-            We reserve the right to suspend or terminate access to the Service at any time for violations of these Terms, misuse of outputs, or security reasons.
+            We reserve the right to suspend access to the Service for misuse, including defamation, misrepresentation of outputs, harassment, or other conduct that violates these Terms.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Audit and Logging Notice</CardTitle>
+          <CardTitle>Logging and Security</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            All access to and use of the Service is logged for security, compliance, and audit purposes.
+            Access to the Service is logged for security and operational purposes. Logs include authentication events and general usage patterns. Logs may be reviewed in response to suspected misuse or security incidents.
           </p>
-          <ul className="list-disc space-y-2 pl-6">
-            <li>Logs include authentication events, data access patterns, and export activities</li>
-            <li>Logs may be reviewed in response to suspected misuse or security incidents</li>
-            <li>Audit logs are retained for a minimum of two (2) years</li>
-          </ul>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Immediate Remedies</CardTitle>
+          <CardTitle>Misuse and Remedies</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The Company reserves the right to take immediate action in response to violations of these Terms, including but not limited to:
+            In cases of serious misuse — such as unauthorized redistribution with disclaimers removed, defamation, or systematic misrepresentation — we may:
           </p>
           <ul className="list-disc space-y-2 pl-6">
-            <li>Immediate suspension of access without prior notice for suspected misuse</li>
-            <li>Pursuit of legal remedies for unauthorized redistribution, defamation, or misrepresentation</li>
-            <li>Termination of accounts with no refund for any prepaid services</li>
+            <li>Suspend access without prior notice</li>
+            <li>Pursue appropriate legal remedies</li>
           </ul>
         </CardContent>
       </Card>
@@ -238,7 +214,7 @@ export default function Terms() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The Service analyzes publicly available datasets released by government agencies and other public sources. These datasets may contain errors, omissions, or outdated information.
+            The Service analyzes publicly available datasets released by government agencies. These datasets may contain errors, omissions, or outdated information.
           </p>
           <ul className="list-disc space-y-2 pl-6">
             <li>We do not guarantee the accuracy, completeness, or timeliness of source data</li>
@@ -254,7 +230,7 @@ export default function Terms() {
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
-            To the maximum extent permitted by law, the Company shall not be liable for indirect, incidental, or consequential damages arising from use of the Service.
+            To the maximum extent permitted by law, OutlierGov and its maintainers shall not be liable for indirect, incidental, or consequential damages arising from use of the Service.
           </p>
         </CardContent>
       </Card>
@@ -265,7 +241,7 @@ export default function Terms() {
         </CardHeader>
         <CardContent className="text-muted-foreground">
           <p>
-            You agree to indemnify and hold the Company harmless from claims arising from your misuse of the Service or violation of these Terms.
+            You agree to indemnify and hold OutlierGov and its maintainers harmless from claims arising from your misuse of the Service or violation of these Terms.
           </p>
         </CardContent>
       </Card>
@@ -305,10 +281,10 @@ export default function Terms() {
           <p>Questions regarding these Terms may be directed to:</p>
           <p className="mt-2">
             <a
-              href="mailto:info@gasilov.com"
+              href="mailto:arif@outliergov.com"
               className="text-primary underline hover:text-primary/80"
             >
-              info@gasilov.com
+              arif@outliergov.com
             </a>
           </p>
         </CardContent>

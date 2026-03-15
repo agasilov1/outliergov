@@ -126,15 +126,11 @@ export default function Privacy() {
             <li><strong>Authentication:</strong> Identity management and access control services</li>
             <li><strong>Analytics:</strong> Usage monitoring and performance optimization services</li>
           </ul>
-          <p>
-            For a complete list of subprocessors, contact us at{' '}
-            <a
-              href="mailto:info@gasilov.com"
-              className="text-primary underline hover:text-primary/80"
-            >
-              info@gasilov.com
-            </a>
-          </p>
+          <p>Our current subprocessors include:</p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li><strong>Supabase (US):</strong> Database hosting, authentication, and backend functions</li>
+            <li><strong>Lovable / Netlify (US):</strong> Application hosting and deployment</li>
+          </ul>
         </CardContent>
       </Card>
 
@@ -195,10 +191,10 @@ export default function Privacy() {
           <p>If you have questions about this Privacy Policy, contact us at:</p>
           <p className="mt-2">
             <a
-              href="mailto:info@gasilov.com"
+              href="mailto:arif@outliergov.com"
               className="text-primary underline hover:text-primary/80"
             >
-              info@gasilov.com
+              arif@outliergov.com
             </a>
           </p>
         </CardContent>

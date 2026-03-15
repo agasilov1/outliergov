@@ -22,8 +22,8 @@ const faqs = [
 ];
 
 const relatedLinks = [
-  { to: '/qui-tam-research-tools', label: 'Qui Tam Research and Case Screening' },
-  { to: '/healthcare-fraud-data-attorneys', label: 'Healthcare Fraud Data for Attorneys' },
+  { to: '/accountability-research-tools', label: 'Public Accountability Research Tools' },
+  { to: '/provider-registry', label: 'Medicare Outlier Registry' },
 ];
 
 export default function MedicareBillingOutlierAnalysis() {
