@@ -359,34 +359,36 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* User info card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Welcome back
-            {isAdmin && (
-              <Badge variant="secondary" className="bg-accent text-accent-foreground">
-                Admin
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription>{user?.email}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Roles:</span>
-            {roles.length > 0 ? (
-              roles.map((role) => (
-                <Badge key={role} variant="outline">
-                  {role}
+      {/* User info card - only when logged in */}
+      {user && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Welcome back
+              {isAdmin && (
+                <Badge variant="secondary" className="bg-accent text-accent-foreground">
+                  Admin
                 </Badge>
-              ))
-            ) : (
-              <Badge variant="outline">No roles assigned</Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </CardTitle>
+            <CardDescription>{user.email}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Roles:</span>
+              {roles.length > 0 ? (
+                roles.map((role) => (
+                  <Badge key={role} variant="outline">
+                    {role}
+                  </Badge>
+                ))
+              ) : (
+                <Badge variant="outline">No roles assigned</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats overview */}
       <div className="grid gap-4 md:grid-cols-4">
