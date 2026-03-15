@@ -143,9 +143,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               />
               <span className="text-lg font-semibold">OutlierGov</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              <LogOut className="h-4 w-4" />
-            </Button>
+            {user ? (
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            )}
           </header>
 
           {/* Mobile navigation */}
