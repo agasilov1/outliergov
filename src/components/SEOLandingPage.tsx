@@ -8,8 +8,8 @@ import outlierLogo from '@/assets/OutlierGOV-logo.png';
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/medicare-billing-outlier-analysis', label: 'Medicare Billing' },
-  { to: '/qui-tam-research-tools', label: 'Qui Tam Tools' },
-  { to: '/healthcare-fraud-data-attorneys', label: 'Fraud Data' },
+  { to: '/accountability-research-tools', label: 'Research Tools' },
+  { to: '/provider-registry', label: 'Provider Registry' },
 ];
 
 interface FAQItem {
