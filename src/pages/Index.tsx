@@ -103,7 +103,7 @@ const Index = () => {
       {/* CTA */}
       <section className="mx-auto max-w-4xl px-4 pb-12">
         <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Button size="lg" onClick={() => navigate('/auth')} className="gap-2">
+          <Button size="lg" onClick={() => navigate('/dashboard')} className="gap-2">
             Explore the Registry
             <ArrowRight className="h-4 w-4" />
           </Button>
