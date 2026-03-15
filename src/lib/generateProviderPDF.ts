@@ -128,7 +128,7 @@ export async function generateProviderPDF(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.text('Statistical analysis only – Not a finding of fraud or wrongdoing', PAGE_W - MARGIN, 20, { align: 'right' });
-  doc.text('Data Source: CMS Medicare Part B | For internal screening use only', PAGE_W - MARGIN, 32, { align: 'right' });
+  doc.text('Data Source: CMS Medicare Part B', PAGE_W - MARGIN, 32, { align: 'right' });
 
   y = 78;
 

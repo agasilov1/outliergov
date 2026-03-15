@@ -378,7 +378,7 @@ export function ProviderBrief({
           {/* Footer */}
           <div className="border-t pt-4 text-center text-xs text-muted-foreground">
             <p>OutlierGov Statistical Analysis Platform</p>
-            <p>Confidential - For Authorized Use Only</p>
+            <p>Free, open-source public accountability tool • MIT License</p>
           </div>
         </div>
       </DialogContent>

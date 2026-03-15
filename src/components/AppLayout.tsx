@@ -202,7 +202,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Footer */}
           <footer className="border-t bg-card px-6 py-4">
             <div className="flex flex-col items-center justify-between gap-2 text-sm text-muted-foreground sm:flex-row">
-              <p>© {new Date().getFullYear()} OutlierGov. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} OutlierGov</p>
               <div className="flex gap-4">
                 <Link to="/privacy" className="hover:text-foreground hover:underline">
                   Privacy Policy
