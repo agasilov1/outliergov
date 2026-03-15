@@ -654,7 +654,12 @@ export default function ProviderDetail() {
                 ) : aiError ? (
                   <p className="text-sm text-muted-foreground italic">Summary unavailable</p>
                 ) : (
-                  <p className="text-sm leading-relaxed">{aiSummary}</p>
+                  <>
+                    <p className="text-sm leading-relaxed">{aiSummary}</p>
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      AI-generated from public CMS data. Does not allege fraud or wrongdoing.
+                    </p>
+                  </>
                 )}
               </div>
             </div>
