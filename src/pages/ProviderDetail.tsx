@@ -456,7 +456,7 @@ export default function ProviderDetail() {
     <div className="space-y-6 print-container">
       {/* Print-only disclaimer banner */}
       <div className="hidden print:block print-disclaimer">
-        Statistical analysis only • Not a finding of fraud or wrongdoing • Data Source: CMS Medicare Part B • For internal screening use only
+        Statistical analysis only • Not a finding of fraud or wrongdoing • Data Source: CMS Medicare Part B
       </div>
       {/* Header with back button and search */}
       <div className="flex items-center justify-between gap-4 no-print">
