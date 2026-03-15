@@ -101,18 +101,34 @@ export function AppLayout({ children }: AppLayoutProps) {
           </nav>
 
           <div className="border-t border-sidebar-border p-4">
-            <div className="mb-3 truncate text-sm text-sidebar-foreground/70">
-              {user?.email}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={signOut}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+            {user ? (
+              <>
+                <div className="mb-3 truncate text-sm text-sidebar-foreground/70">
+                  {user.email}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={signOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                asChild
+              >
+                <Link to="/auth">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign in
+                </Link>
+              </Button>
+            )}
           </div>
         </aside>
 
