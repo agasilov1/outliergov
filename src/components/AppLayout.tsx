@@ -174,7 +174,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </Link>
               );
             })}
-            {isAdmin && adminNavigation.map((item) => {
+            {user && isAdmin && adminNavigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link

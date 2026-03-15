@@ -84,11 +84,9 @@ const App = () => (
           <Route
             path="/compare"
             element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <ProviderCompare />
-                </AppLayout>
-              </ProtectedRoute>
+              <AppLayout>
+                <ProviderCompare />
+              </AppLayout>
             }
           />
           <Route path="/medicare-billing-outlier-analysis" element={<MedicareBillingOutlierAnalysis />} />

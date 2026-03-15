@@ -130,7 +130,7 @@ export default function SEOLandingPage({ children, title, description, path, her
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-4 py-12 text-center sm:px-6">
           <h2 className="text-xl font-semibold text-foreground">Ready to explore the data?</h2>
           <Button size="lg" variant="default" asChild className="gap-2">
-            <Link to="/auth">
+            <Link to="/dashboard">
               Explore the Registry
               <ArrowRight className="h-4 w-4" />
             </Link>
