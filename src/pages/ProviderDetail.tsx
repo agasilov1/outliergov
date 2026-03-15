@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown, Star } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle2, Info, Search, Download, ChevronDown, Star, Sparkles } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DataContextCard } from '@/components/DataContextCard';
 import { ProviderCharts } from '@/components/ProviderCharts';
 import { useToast } from '@/hooks/use-toast';
@@ -266,6 +267,54 @@ export default function ProviderDetail() {
 
   const rank = registryRank?.rank ?? null;
   const totalProviders = registryRank?.total ?? null;
+
+  // Compute trend direction from metrics
+  const trendDirection = useMemo(() => {
+    if (!metricsData || metricsData.length < 2) return 'stable';
+    const sorted = [...metricsData].sort((a, b) => a.year - b.year);
+    const first = sorted[0].x_vs_peer_median;
+    const last = sorted[sorted.length - 1].x_vs_peer_median;
+    if (first == null || last == null) return 'unknown';
+    if (last > first * 1.1) return 'increasing';
+    if (last < first * 0.9) return 'decreasing';
+    return 'stable';
+  }, [metricsData]);
+
+  // AI summary query
+  const { data: aiSummary, isLoading: isAiLoading, error: aiError } = useQuery({
+    queryKey: ['provider-ai-summary', npi],
+    queryFn: async () => {
+      const latest = metricsData?.[metricsData.length - 1];
+      const registryRow = await supabase
+        .from('outlier_registry')
+        .select('years_as_outlier')
+        .eq('npi', npi!)
+        .maybeSingle();
+
+      const drugPct = metricsData ? [...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct : null;
+
+      const { data, error } = await supabase.functions.invoke('generate-provider-summary', {
+        body: {
+          npi,
+          name: provider?.provider_name,
+          specialty: provider?.specialty,
+          state: provider?.state,
+          ratio: bestPeerRatio?.toFixed(1),
+          drug_pct: drugPct != null ? (drugPct * 100).toFixed(1) : null,
+          years: registryRow.data?.years_as_outlier,
+          risk_score: latest?.bene_avg_risk_score?.toFixed(2),
+          hcpcs_count: latest?.tot_hcpcs_cds,
+          trend: trendDirection,
+        },
+      });
+
+      if (error) throw error;
+      return data.summary as string;
+    },
+    enabled: !!npi && !!provider && !!metricsData && metricsData.length > 0,
+    staleTime: Infinity,
+    retry: 1,
+  });
 
   // Top X% ranking context
   const topPercentage = useMemo(() => {
@@ -585,6 +634,33 @@ export default function ProviderDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI-Generated Summary */}
+      {aiSummary !== undefined && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-sm">AI-Generated Summary</h3>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">GPT-4o mini</Badge>
+                </div>
+                {isAiLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ) : aiError ? (
+                  <p className="text-sm text-muted-foreground italic">Summary unavailable</p>
+                ) : (
+                  <p className="text-sm leading-relaxed">{aiSummary}</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Peer Group Snapshot Panel */}
       {latestYear && latestYear.peerGroupSize && (

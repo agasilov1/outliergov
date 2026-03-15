@@ -684,6 +684,30 @@ export type Database = {
           },
         ]
       }
+      provider_summaries: {
+        Row: {
+          created_at: string | null
+          model: string
+          npi: string
+          prompt_hash: string | null
+          summary: string
+        }
+        Insert: {
+          created_at?: string | null
+          model?: string
+          npi: string
+          prompt_hash?: string | null
+          summary: string
+        }
+        Update: {
+          created_at?: string | null
+          model?: string
+          npi?: string
+          prompt_hash?: string | null
+          summary?: string
+        }
+        Relationships: []
+      }
       provider_year_metrics: {
         Row: {
           allowed_per_bene_cents: number | null
