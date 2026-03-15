@@ -505,20 +505,26 @@ export default function Dashboard() {
 
           {/* Watchlist toggle + filter persistence */}
           <div className="flex flex-wrap items-center gap-4 mt-2">
-            <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
-              <Switch
-                id="watchlist-only"
-                checked={watchlistOnly}
-                onCheckedChange={(val) => updateFilters({ watchlist: val ? 'true' : null })}
-              />
-              <Label htmlFor="watchlist-only" className="text-sm cursor-pointer flex items-center gap-1">
-                <Star className="h-3.5 w-3.5" />
-                My Watchlist
-              </Label>
-              {watchlistSet.size > 0 && (
-                <Badge variant="secondary" className="text-xs">{watchlistSet.size}</Badge>
-              )}
-            </div>
+            {user ? (
+              <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+                <Switch
+                  id="watchlist-only"
+                  checked={watchlistOnly}
+                  onCheckedChange={(val) => updateFilters({ watchlist: val ? 'true' : null })}
+                />
+                <Label htmlFor="watchlist-only" className="text-sm cursor-pointer flex items-center gap-1">
+                  <Star className="h-3.5 w-3.5" />
+                  My Watchlist
+                </Label>
+                {watchlistSet.size > 0 && (
+                  <Badge variant="secondary" className="text-xs">{watchlistSet.size}</Badge>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                <Link to="/auth" className="text-primary underline hover:text-primary/80">Sign in</Link> to save watchlists and export reports
+              </div>
+            )}
 
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={handleSaveAsDefault}>
