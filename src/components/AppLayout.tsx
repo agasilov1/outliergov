@@ -74,7 +74,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               );
             })}
 
-            {isAdmin && (
+            {user && isAdmin && (
               <>
                 <div className="my-4 border-t border-sidebar-border" />
                 {adminNavigation.map((item) => {
