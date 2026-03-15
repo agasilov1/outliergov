@@ -1,90 +1,85 @@
 
 
-## Plan: Redesign SEO Landing Pages and Homepage with Modern Visual Styling
+## Plan: Remove Login Gate, New Terms, About Section, SEO Updates
 
-### Problem
-The pages are walls of plain text with zero visual hierarchy, no spacing rhythm, no cards, no icons, no color accents. They look like unstyled HTML from the 90s.
+### 1. Database: Add Public Read Access (Migration)
 
-### Design Approach
-Professional SaaS-style landing pages: hero sections with gradient backgrounds, stat callout cards, icon-accented feature sections, proper whitespace, and visual rhythm. Keep it clean and authoritative (legal/gov audience) but visually engaging.
+Add `anon` SELECT policies to allow unauthenticated browsing:
 
-### Changes
+- **`outlier_registry`**: Add policy `"Public can view outlier_registry"` for `anon` role, SELECT, `USING (true)`
+- **`provider_year_metrics`**: Add policy `"Public can view provider_year_metrics"` for `anon` role, SELECT, `USING (true)`
 
-**`src/components/SEOLandingPage.tsx`** — Full visual overhaul of the shared layout:
-- **Sticky header**: Full-width header with logo + nav, subtle border-bottom, proper padding
-- **Hero section**: Large H1 with a subtle gradient background band, introductory paragraph in larger text
-- **Content sections**: Children rendered inside styled cards with left-accent borders for H2 sections
-- **Stat callouts**: Add a slot for highlight numbers (e.g., "1.2M providers", "2,200 outliers", "50 states")
-- **FAQ section**: Styled as an accordion or cards with subtle backgrounds instead of flat text
-- **CTA section**: Full-width gradient band with centered button, not a lonely button at the bottom
-- **Footer**: Clean horizontal layout with proper spacing
+These tables contain only public CMS data. Watchlist, profiles, admin tables remain auth-only.
 
-**`src/pages/MedicareBillingOutlierAnalysis.tsx`** — Add visual elements:
-- Add a `stats` array: `[{value: "1.2M", label: "Providers Screened"}, {value: "Top 0.5%", label: "Threshold"}, {value: "2,200", label: "Flagged Providers"}]`
-- Pass stats to SEOLandingPage as a prop
-- Wrap content paragraphs in proper section containers
+### 2. Remove ProtectedRoute from Dashboard and Provider Routes (`src/App.tsx`)
 
-**`src/pages/QuiTamResearchTools.tsx`** — Same treatment:
-- Stats: e.g., "4 Stages Supported", "50 States", "Public Data"
-- Proper section structure
+Change `/dashboard`, `/provider/:id`, `/methodology`, `/data-sources`, `/compare` routes to render without `ProtectedRoute`. Keep `ProtectedRoute` only on `/admin`.
 
-**`src/pages/HealthcareFraudDataAttorneys.tsx`** — Same treatment:
-- Stats: "3.7M Records", "50 States", "PDF Export"
+Wrap these pages in `AppLayout` still but without ProtectedRoute.
 
-**`src/pages/Index.tsx`** — Homepage polish:
-- Hero section with gradient background behind the logo/title area
-- Navigation cards get icons (Search, Scale, FileText from lucide), more padding, hover shadows
-- Better vertical rhythm and spacing
-- CTA buttons in a row on desktop instead of stacked
+### 3. Make AppLayout Work Without Auth (`src/components/AppLayout.tsx`)
 
-### Visual Structure for Each SEO Page
+- Show sign-in link instead of email/sign-out when `user` is null
+- Hide admin nav when not authenticated
+- Gracefully handle no user state
 
-```text
-┌──────────────────────────────────────────────┐
-│ [Logo] OutlierGov    Home | Medicare | ...   │  ← sticky header
-├──────────────────────────────────────────────┤
-│                                              │
-│  ░░░░░░ gradient background ░░░░░░░░░░░░░░░  │
-│     H1: Medicare Billing Outlier Analysis    │
-│     Intro paragraph in larger text           │
-│                                              │
-│  ┌────────┐  ┌────────┐  ┌────────┐          │
-│  │ 1.2M   │  │Top 0.5%│  │ 2,200  │          │  ← stat cards
-│  │Screened│  │Threshold│  │Flagged │          │
-│  └────────┘  └────────┘  └────────┘          │
-│                                              │
-│  ┌─ How Peer Normalization Works ──────────┐ │
-│  │ accent border   paragraph text...       │ │  ← content cards
-│  └─────────────────────────────────────────┘ │
-│                                              │
-│  ┌─ Data Source and Methodology ───────────┐ │
-│  │ accent border   paragraph text...       │ │
-│  └─────────────────────────────────────────┘ │
-│                                              │
-│  ░░░░░ CTA gradient band ░░░░░░░░░░░░░░░░░  │
-│       [Request Access]                       │
-│       arif@gasilov.com                       │
-│                                              │
-│  FAQ (styled cards)                          │
-│  Related links                               │
-│  Footer                                     │
-└──────────────────────────────────────────────┘
-```
+### 4. Make Dashboard Work Without Auth (`src/pages/Dashboard.tsx`)
 
-### Technical Details
-- Use existing design system colors: `--primary`, `--accent`, `--muted`, `--card`
-- Gradient backgrounds use Tailwind's `bg-gradient-to-br from-primary/5 to-accent/5`
-- Stat cards use the existing Card components from `ui/card.tsx`
-- FAQ items styled as bordered cards with padding
-- Nav gets `sticky top-0 z-50 bg-background/95 backdrop-blur` for scroll behavior
-- Add `stats` prop to `SEOLandingPageProps` as `{value: string, label: string}[]`
-- Icons from lucide-react for homepage cards (Search, Scale, FileText)
-- All changes are CSS/layout only — no new dependencies
+- Remove the "Welcome back" user info card (or show it only when logged in)
+- Hide watchlist toggle when not logged in
+- Show "Sign in to save watchlists" prompt when unauthenticated user clicks star
+- Keep all data queries working (they'll use anon key now)
 
-### Files Modified
-- `src/components/SEOLandingPage.tsx` — major visual redesign
-- `src/pages/MedicareBillingOutlierAnalysis.tsx` — add stats, restructure content
-- `src/pages/QuiTamResearchTools.tsx` — add stats, restructure content
-- `src/pages/HealthcareFraudDataAttorneys.tsx` — add stats, restructure content
-- `src/pages/Index.tsx` — polish homepage with gradient hero, card icons, better layout
+### 5. Make ProviderDetail Work Without Auth (`src/pages/ProviderDetail.tsx`)
+
+- Skip audit log insert when no user
+- Hide watchlist button when not logged in (or show "Sign in to watch")
+- Keep CSV/PDF export visible to all (public data)
+- Keep search, charts, all data visible
+
+### 6. Make useWatchlist Gracefully Degrade (`src/hooks/useWatchlist.ts`)
+
+- Return empty set and no-op toggle when user is null (already does this mostly, just needs the toggle to not throw)
+
+### 7. Homepage Updates (`src/pages/Index.tsx`)
+
+- Change CTA from `/auth` to `/dashboard`
+- Remove auto-redirect to `/dashboard` when logged in (or keep it, users can still access dashboard directly)
+- Enhance About section with: "Built by Arif Gasilov (University of Arizona) to make Medicare spending data accessible. OutlierGov is a free, open-source public accountability tool."
+
+### 8. SEO Landing Pages CTA Fix
+
+- **`src/components/SEOLandingPage.tsx`**: Change CTA link from `/auth` to `/dashboard`
+- **`src/pages/QuiTamResearchTools.tsx`**: Add "free and open-source" to intro text
+- **`src/pages/HealthcareFraudDataAttorneys.tsx`**: Add "free and open-source" to intro text
+
+### 9. Terms of Service (`src/pages/Terms.tsx`) — Full Rewrite
+
+Replace entire page content with the user's provided Terms of Use text. Use March 15, 2026 as the date. Structure with the same Card-based layout.
+
+### 10. Auth Page Subtitle (`src/pages/Auth.tsx`)
+
+Update description to: "Sign in to save watchlists, export reports, and access full provider profiles"
+(Already says this — just confirm it's correct given the new framing)
+
+---
+
+### Files Modified (10)
+
+| File | Scope |
+|------|-------|
+| `src/App.tsx` | Remove ProtectedRoute from data routes |
+| `src/components/AppLayout.tsx` | Handle unauthenticated users |
+| `src/pages/Dashboard.tsx` | Graceful degradation without auth |
+| `src/pages/ProviderDetail.tsx` | Skip audit log, hide watchlist when no user |
+| `src/hooks/useWatchlist.ts` | Graceful no-op when unauthenticated |
+| `src/pages/Terms.tsx` | Full rewrite with user's text |
+| `src/pages/Index.tsx` | CTA link, About section with personal details |
+| `src/components/SEOLandingPage.tsx` | CTA link fix |
+| `src/pages/QuiTamResearchTools.tsx` | Add "free and open-source" |
+| `src/pages/HealthcareFraudDataAttorneys.tsx` | Add "free and open-source" |
+
+### Database Migration
+
+Add 2 RLS policies for public read access to `outlier_registry` and `provider_year_metrics`.
 
