@@ -268,6 +268,54 @@ export default function ProviderDetail() {
   const rank = registryRank?.rank ?? null;
   const totalProviders = registryRank?.total ?? null;
 
+  // Compute trend direction from metrics
+  const trendDirection = useMemo(() => {
+    if (!metricsData || metricsData.length < 2) return 'stable';
+    const sorted = [...metricsData].sort((a, b) => a.year - b.year);
+    const first = sorted[0].x_vs_peer_median;
+    const last = sorted[sorted.length - 1].x_vs_peer_median;
+    if (first == null || last == null) return 'unknown';
+    if (last > first * 1.1) return 'increasing';
+    if (last < first * 0.9) return 'decreasing';
+    return 'stable';
+  }, [metricsData]);
+
+  // AI summary query
+  const { data: aiSummary, isLoading: isAiLoading, error: aiError } = useQuery({
+    queryKey: ['provider-ai-summary', npi],
+    queryFn: async () => {
+      const latest = metricsData?.[metricsData.length - 1];
+      const registryRow = await supabase
+        .from('outlier_registry')
+        .select('years_as_outlier')
+        .eq('npi', npi!)
+        .maybeSingle();
+
+      const drugPct = metricsData ? [...metricsData].reverse().find(m => m.drug_pct != null)?.drug_pct : null;
+
+      const { data, error } = await supabase.functions.invoke('generate-provider-summary', {
+        body: {
+          npi,
+          name: provider?.provider_name,
+          specialty: provider?.specialty,
+          state: provider?.state,
+          ratio: bestPeerRatio?.toFixed(1),
+          drug_pct: drugPct != null ? (drugPct * 100).toFixed(1) : null,
+          years: registryRow.data?.years_as_outlier,
+          risk_score: latest?.bene_avg_risk_score?.toFixed(2),
+          hcpcs_count: latest?.tot_hcpcs_cds,
+          trend: trendDirection,
+        },
+      });
+
+      if (error) throw error;
+      return data.summary as string;
+    },
+    enabled: !!npi && !!provider && !!metricsData && metricsData.length > 0,
+    staleTime: Infinity,
+    retry: 1,
+  });
+
   // Top X% ranking context
   const topPercentage = useMemo(() => {
     if (rank && totalProviders) {
