@@ -620,14 +620,18 @@ export default function Dashboard() {
                         >
                           {/* Star / Watchlist */}
                           <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => toggleWatchlist(provider.npi)}
-                              disabled={isToggling}
-                              className="p-1 rounded hover:bg-muted"
-                              aria-label={isStarred ? 'Remove from watchlist' : 'Add to watchlist'}
-                            >
-                              <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
-                            </button>
+                            {user ? (
+                              <button
+                                onClick={() => toggleWatchlist(provider.npi)}
+                                disabled={isToggling}
+                                className="p-1 rounded hover:bg-muted"
+                                aria-label={isStarred ? 'Remove from watchlist' : 'Add to watchlist'}
+                              >
+                                <Star className={`h-4 w-4 ${isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                              </button>
+                            ) : (
+                              <Star className="h-4 w-4 text-muted-foreground/30" />
+                            )}
                           </TableCell>
                           {/* Compare checkbox */}
                           <TableCell className="px-2" onClick={(e) => e.stopPropagation()}>
