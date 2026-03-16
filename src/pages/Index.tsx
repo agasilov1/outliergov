@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, Loader2, Search, Scale, FileText } from 'lucide-react';
+import { ArrowRight, Search, Scale, FileText } from 'lucide-react';
 import { useEffect } from 'react';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
 
