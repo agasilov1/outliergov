@@ -27,13 +27,6 @@ const navCards = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, loading, navigate]);
 
   useEffect(() => {
     const script = document.createElement('script');
