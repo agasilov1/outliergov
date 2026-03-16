@@ -118,7 +118,7 @@ const Index = () => {
         <div className="mx-auto max-w-3xl px-4 py-12 text-center">
           <h2 className="text-lg font-semibold text-foreground mb-3">About OutlierGov</h2>
           <p className="text-muted-foreground leading-relaxed">
-            OutlierGov was built by Arif Gasilov at the University of Arizona to make Medicare spending data
+            OutlierGov was built by Arif G. at the University of Arizona to make Medicare spending data
             accessible and understandable. Using publicly available CMS datasets, it applies peer-normalized
             statistical analysis to surface billing anomalies — giving researchers, journalists, policymakers,
             and the public a transparent, reproducible tool for public accountability.
