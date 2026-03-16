@@ -51,4 +51,4 @@ MIT
 
 ## Author
 
-Built by [Arif Gasilov](mailto:arif@outliergov.com) (University of Arizona)
+Built by [Arif G.](mailto:arif@outliergov.com) (University of Arizona)
