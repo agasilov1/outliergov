@@ -1,73 +1,54 @@
-# Welcome to your Lovable project
+# OutlierGov
 
-## Project info
+Free, open-source public accountability tool that makes Medicare spending patterns transparent and accessible to journalists, researchers, policymakers, and the public.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Live site:** [outliergov.com](https://outliergov.com)
 
-## How can I edit this code?
+## What it does
 
-There are several ways of editing your application.
+OutlierGov processes 3.7 million provider-year records from CMS Medicare Part B public data to identify providers with persistently extreme billing patterns. Each of the 1.2 million providers billing Medicare annually is compared only to peers in the same specialty and state.
 
-**Use Lovable**
+A provider is flagged when their allowed amount per beneficiary falls in the top 0.5% of their peer group for at least two consecutive years. Roughly 2,200 providers currently meet this threshold.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Features
 
-Changes made via Lovable will be committed automatically to this repo.
+- Searchable registry of verified statistical outliers across all 50 states and all Medicare Part B specialties
+- Provider profiles with peer group rank, ratio to median, year-over-year trend data, and contextual flags (drug-dominant billing, patient acuity, procedure diversity)
+- AI-generated plain-language summaries that translate statistical patterns into accessible explanations (GPT-4o-mini)
+- Filterable by specialty, state, outlier severity, drug percentage, and trend direction
+- Exportable provider profiles (CSV, PDF)
+- Fully reproducible methodology using public CMS data
 
-**Use your preferred IDE**
+## Data source
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+[CMS Medicare Physician and Other Practitioners Provider Utilization and Payment Data](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider-and-service) (2021-2023)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Methodology
 
-Follow these steps:
+1. Aggregate provider-level data by NPI, computing allowed amount per beneficiary
+2. Assign each provider to a peer group by specialty and state
+3. Compute percentile ranks within each peer group
+4. Flag providers in the top 0.5% for two or more consecutive years
+5. Generate AI-powered plain-language summaries of each flagged provider's statistical profile
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Full methodology documentation: [outliergov.com/methodology](https://outliergov.com/methodology)
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Tech stack
 
-# Step 3: Install the necessary dependencies.
-npm i
+React, TypeScript, Supabase (Postgres + Edge Functions), OpenAI API (GPT-4o-mini), Python/pandas for offline data processing
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+## Roadmap
 
-**Edit a file directly in GitHub**
+- Natural language querying across the full provider dataset
+- Public API for programmatic access
+- Medicare Advantage and Part D dataset integration
+- ML-based pattern classification (clustering outlier types by billing signature)
+- Embeddable widgets for newsrooms
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## License
 
-**Use GitHub Codespaces**
+MIT
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Author
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Built by [Arif Gasilov](mailto:arif@outliergov.com) (University of Arizona)
