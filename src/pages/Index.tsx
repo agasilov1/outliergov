@@ -66,34 +66,48 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <section className="bg-gradient-to-br from-primary/5 via-background to-accent/5">
-        <div className="mx-auto flex max-w-4xl flex-col items-center px-4 pb-10 pt-20 text-center sm:pt-28">
+      <section className="bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700">
+        <div className="mx-auto flex max-w-4xl flex-col items-center px-4 pb-12 pt-20 text-center sm:pt-28">
           <div className="mb-8 flex items-center gap-3">
             <img src={outlierLogo} alt="OutlierGov logo" className="h-14 w-14 rounded-xl object-contain" />
             <div className="text-left">
-              <h1 className="text-3xl font-bold text-foreground">OutlierGov</h1>
-              <p className="text-sm text-muted-foreground">Healthcare Spending Analytics</p>
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-white">OutlierGov</h1>
+              <p className="text-sm text-slate-300">Public Accountability Through Open Data</p>
             </div>
           </div>
-          <p className="max-w-2xl text-xl leading-relaxed text-muted-foreground">
+          <p className="max-w-2xl text-xl leading-relaxed text-slate-300">
             OutlierGov is a free, open-source public accountability tool that identifies Medicare providers
             whose allowed amount per beneficiary is persistently extreme (top 0.5%) relative to specialty
             and state peers, across multiple years.
           </p>
+
+          {/* Stat Bar */}
+          <div className="mt-10 grid w-full max-w-2xl grid-cols-3 gap-4">
+            {[
+              { value: '1.2M+', label: 'Providers Screened' },
+              { value: '3.7M', label: 'Records Analyzed' },
+              { value: '2,200+', label: 'Outliers Identified' },
+            ].map(stat => (
+              <div key={stat.label} className="rounded-lg bg-white/10 px-4 py-4 backdrop-blur-sm">
+                <p className="text-2xl font-bold text-white">{stat.value}</p>
+                <p className="mt-1 text-xs text-slate-300">{stat.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Navigation Cards */}
-      <section className="mx-auto -mt-1 max-w-4xl px-4 pb-12">
+      <section className="mx-auto max-w-4xl px-4 py-12">
         <div className="grid gap-4 sm:grid-cols-3">
           {navCards.map(card => (
             <Link
               key={card.to}
               to={card.to}
-              className="group rounded-xl border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+              className="group rounded-xl border border-l-4 border-l-teal-500 bg-card p-5 transition-all hover:shadow-lg hover:-translate-y-1"
             >
-              <card.icon className="mb-3 h-5 w-5 text-primary" />
-              <h2 className="font-semibold text-foreground group-hover:text-primary transition-colors">{card.title}</h2>
+              <card.icon className="mb-3 h-5 w-5 text-teal-500" />
+              <h2 className="font-semibold text-foreground group-hover:text-teal-600 transition-colors">{card.title}</h2>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{card.desc}</p>
             </Link>
           ))}
