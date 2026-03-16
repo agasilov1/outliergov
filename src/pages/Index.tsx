@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, Loader2, Search, Scale, FileText } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { ArrowRight, Search, Scale, FileText } from 'lucide-react';
 import { useEffect } from 'react';
 import outlierLogo from '@/assets/OutlierGOV-logo.png';
 
@@ -28,13 +27,6 @@ const navCards = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, loading, navigate]);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -54,14 +46,6 @@ const Index = () => {
     document.head.appendChild(script);
     return () => { document.head.removeChild(script); };
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
