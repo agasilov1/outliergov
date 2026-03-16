@@ -1,16 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
 
 interface OutlierConcentrationChartsProps {
   excludeInstitutional: boolean;
 }
 
 export function OutlierConcentrationCharts({ excludeInstitutional }: OutlierConcentrationChartsProps) {
-  // Fetch all specialties and states from outlier_registry
+  const [specialtyOpen, setSpecialtyOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
+
   const { data: registryData, isLoading } = useQuery({
     queryKey: ['outlier-concentration', excludeInstitutional],
     queryFn: async () => {
@@ -64,53 +67,67 @@ export function OutlierConcentrationCharts({ excludeInstitutional }: OutlierConc
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Top 10 Specialties by Outlier Count</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {specialtyData.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={specialtyData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={140}
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v: string) => v.length > 20 ? v.slice(0, 18) + '…' : v}
-                />
-                <Tooltip />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Outliers" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      <Collapsible open={specialtyOpen} onOpenChange={setSpecialtyOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-2 cursor-pointer select-none flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Top 10 Specialties by Outlier Count</CardTitle>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${specialtyOpen ? 'rotate-180' : ''}`} />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              {specialtyData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={specialtyData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={140}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v: string) => v.length > 20 ? v.slice(0, 18) + '…' : v}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Outliers" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Top 10 States by Outlier Count</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {stateData.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stateData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={40} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} name="Outliers" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      <Collapsible open={stateOpen} onOpenChange={setStateOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="pb-2 cursor-pointer select-none flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Top 10 States by Outlier Count</CardTitle>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${stateOpen ? 'rotate-180' : ''}`} />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              {stateData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={stateData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" width={40} tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} name="Outliers" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     </div>
   );
 }
